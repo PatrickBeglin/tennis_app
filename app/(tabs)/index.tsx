@@ -1,75 +1,179 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { Ionicons } from "@expo/vector-icons";
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import spacing from '../spacing';
 
-import { HelloWave } from '@/components/HelloWave';
-import ParallaxScrollView from '@/components/ParallaxScrollView';
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
-
-export default function HomeScreen() {
+export default function Index() {
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+    <View style={styles.screen}>
+      <View style = {styles.header}>
+        <View style={styles.profile}>
+          <View style={styles.avatar} />
+          <Text style={styles.name}>Patrick</Text>
+        </View>
+
+        <TouchableOpacity style={styles.connectButton}>
+          <Ionicons name="bluetooth" size={18} color="white"/>
+          <Text style={styles.connectText}>Connect</Text>
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.container}>
+        <Text style={styles.sectionTitle}>Play now</Text>
+
+        <View style={styles.cardRow}>
+          <View style={styles.cardL}>
+            <View style={styles.imagePlaceholder} />
+            <Text style={styles.cardTitle}>General Mode</Text>
+            <Text style={styles.cardDescription}>Play continuously and track metrics...</Text>
+            <TouchableOpacity style={styles.button}>
+              <Text style={styles.buttonText}>Start Session</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.cardR}>
+            <View style={styles.imagePlaceholder} />
+            <Text style={styles.cardTitle}>General Mode</Text>
+            <Text style={styles.cardDescription}>Play continuously and track metrics...</Text>
+            <TouchableOpacity style={styles.button}>
+              <Text style={styles.buttonText}>Start Session</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+      </ScrollView>
+  </View>
   );
 }
 
+
 const styles = StyleSheet.create({
-  titleContainer: {
+  header: {
+    width: '100%',
+    paddingHorizontal: 19,
+    paddingTop: 50,
+    paddingBottom: 20,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: 'black', 
+  },
+
+  profile: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#343335',
+    marginRight: 12,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+
+  name: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '500',
   },
-});
+
+  connectButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#343335',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 12,
+  },
+
+  connectText: {
+    color: 'white',
+    fontSize: 14,
+    marginLeft: 8,
+  },
+
+  screen: {
+    flex: 1,
+    backgroundColor: "black",
+  },
+
+
+
+
+
+
+
+  scroll: {
+    flex: 1,
+    backgroundColor: "black",
+  },
+
+  container: {
+    paddingHorizontal: 19,
+    paddingBottom: spacing.m,
+  },
+
+  sectionTitle: {
+    color: "white",
+    fontSize: 20,
+    fontWeight: "bold",
+    marginBottom: spacing.m,
+  },
+
+  cardRow: {
+    flexDirection: "row",
+  },
+
+  cardL: {
+    marginRight: "2%",
+    backgroundColor: "#1c1c1e",
+    borderRadius: 12,
+    padding: 16,
+    width: "49%",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)", // placeholder for gradient effect
+  },
+
+    cardR: {
+    backgroundColor: "#1c1c1e",
+    borderRadius: 12,
+    padding: 16,
+    width: "49%",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)", // placeholder for gradient effect
+  },
+
+  imagePlaceholder: {
+    height: 100,
+    backgroundColor: "#2c2c2e",
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+
+  cardTitle: {
+    color: "white",
+    fontWeight: "600",
+    fontSize: 16,
+    marginBottom: 4,
+  },
+
+  cardDescription: {
+    color: "#aaa",
+    fontSize: 13,
+    marginBottom: 16,
+  },
+
+  button: {
+    borderColor: "#aaa",
+    borderWidth: 1,
+    borderRadius: 20,
+    paddingVertical: 10,
+    alignItems: "center",
+  },
+
+  buttonText: {
+    color: "white",
+    fontWeight: "500",
+    fontSize: 14,
+  },
+
+})
