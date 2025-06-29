@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import color from '../colors';
 import spacing from '../spacing';
 
 export default function Index() {
@@ -23,8 +24,8 @@ export default function Index() {
         <View style={styles.cardRow}>
           <View style={styles.cardL}>
             <View style={styles.imagePlaceholder} />
-            <Text style={styles.cardTitle}>General Mode</Text>
-            <Text style={styles.cardDescription}>Play continuously and track metrics...</Text>
+            <Text style={styles.cardTitleL}>General Mode</Text>
+            <Text style={styles.cardDescription}>Play continuously and track metrics across...</Text>
             <TouchableOpacity style={styles.button}>
               <Text style={styles.buttonText}>Start Session</Text>
             </TouchableOpacity>
@@ -32,8 +33,8 @@ export default function Index() {
 
           <View style={styles.cardR}>
             <View style={styles.imagePlaceholder} />
-            <Text style={styles.cardTitle}>General Mode</Text>
-            <Text style={styles.cardDescription}>Play continuously and track metrics...</Text>
+            <Text style={styles.cardTitleR}>Serve Mode</Text>
+            <Text style={styles.cardDescription}>Gather instant feedback on your serve</Text>
             <TouchableOpacity style={styles.button}>
               <Text style={styles.buttonText}>Start Session</Text>
             </TouchableOpacity>
@@ -71,9 +72,9 @@ const styles = StyleSheet.create({
   },
 
   name: {
+    fontFamily: 'Inter-Regular',
     color: 'white',
     fontSize: 14,
-    fontWeight: '500',
   },
 
   connectButton: {
@@ -87,6 +88,7 @@ const styles = StyleSheet.create({
 
   connectText: {
     color: 'white',
+    fontFamily: 'Inter-Regular',
     fontSize: 14,
     marginLeft: 8,
   },
@@ -115,7 +117,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     color: "white",
     fontSize: 20,
-    fontWeight: "bold",
+    fontFamily: 'Inter-Bold',
     marginBottom: spacing.m,
   },
 
@@ -125,35 +127,42 @@ const styles = StyleSheet.create({
 
   cardL: {
     marginRight: "2%",
-    backgroundColor: "#1c1c1e",
+    backgroundColor: color.card,
     borderRadius: 12,
-    padding: 16,
+    padding: 12,
     width: "49%",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)", // placeholder for gradient effect
+    borderWidth: 0.5,
+    borderColor: color.purple, // placeholder for gradient effect
   },
 
     cardR: {
     backgroundColor: "#1c1c1e",
     borderRadius: 12,
-    padding: 16,
+    padding: 12,
     width: "49%",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)", // placeholder for gradient effect
+    borderWidth: 0.5,
+    borderColor: color.blue, // placeholder for gradient effect
   },
 
   imagePlaceholder: {
-    height: 100,
-    backgroundColor: "#2c2c2e",
-    borderRadius: 12,
+    aspectRatio: 1,
+    backgroundColor: color.cardLight,
+    borderRadius: 6,
     marginBottom: 16,
   },
 
-  cardTitle: {
-    color: "white",
-    fontWeight: "600",
+  cardTitleR: {
+    fontFamily: 'Inter-Medium',
+    color: color.blue,
     fontSize: 16,
-    marginBottom: 4,
+    marginBottom: 2,
+  },
+
+  cardTitleL: {
+    fontFamily: 'Inter-Medium',
+    color: color.purple,
+    fontSize: 16,
+    marginBottom: 2,
   },
 
   cardDescription: {
@@ -168,11 +177,12 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     paddingVertical: 10,
     alignItems: "center",
+    marginBottom: 4,
   },
 
   buttonText: {
+    fontFamily: "Inter-Bold",
     color: "white",
-    fontWeight: "500",
     fontSize: 14,
   },
 
