@@ -3,6 +3,13 @@ import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-nati
 import color from '../colors';
 import spacing from '../spacing';
 
+import ScoreRings from '../components/score_rings';
+import { AVERAGE_SCORES } from '../data/average_scores';
+
+import { StatBarsList } from "../components/stat_bar_list";
+import { StatTotals } from "../components/stat_totals";
+import { serveData } from "../data/serve_scores";
+
 export default function Index() {
   return (
     <View style={styles.screen}>
@@ -25,7 +32,7 @@ export default function Index() {
           <View style={styles.cardL}>
             <View style={styles.imagePlaceholder} />
             <Text style={styles.cardTitleL}>General Mode</Text>
-            <Text style={styles.cardDescription}>Play continuously and track metrics across...</Text>
+            <Text style={styles.cardDescription}>Play continuously and track metrics across your serve, forehand and backhand</Text>
             <TouchableOpacity style={styles.button}>
               <Text style={styles.buttonText}>Start Session</Text>
             </TouchableOpacity>
@@ -40,7 +47,19 @@ export default function Index() {
             </TouchableOpacity>
           </View>
         </View>
-
+        <View style={styles.doubleTitle}>
+          <Text style={styles.sectionTitle}>Average Scores</Text>
+          <Text style={styles.showMore}>Show more</Text>
+        </View>
+        <ScoreRings data={AVERAGE_SCORES} size={80} width={12} />
+        <View style={styles.doubleTitle}>
+          <Text style={styles.sectionTitle}>Last Session</Text>
+          <Text style={styles.showMore}>Show more</Text>
+        </View>
+        <View style={styles.mainCard}>
+        <StatTotals data={serveData} />
+        <StatBarsList data={serveData} />
+        </View>
       </ScrollView>
   </View>
   );
@@ -82,7 +101,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#343335',
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 4,
     borderRadius: 12,
   },
 
@@ -123,6 +142,8 @@ const styles = StyleSheet.create({
 
   cardRow: {
     flexDirection: "row",
+    marginBottom: spacing.l,
+    alignItems: "stretch",
   },
 
   cardL: {
@@ -133,6 +154,9 @@ const styles = StyleSheet.create({
     width: "49%",
     borderWidth: 0.5,
     borderColor: color.purple, // placeholder for gradient effect
+    display: 'flex',
+    flexDirection: 'column',
+    flex: 1,
   },
 
     cardR: {
@@ -142,10 +166,14 @@ const styles = StyleSheet.create({
     width: "49%",
     borderWidth: 0.5,
     borderColor: color.blue, // placeholder for gradient effect
+    display: 'flex',
+    flexDirection: 'column',
+    flex: 1,
   },
 
   imagePlaceholder: {
     aspectRatio: 1,
+    width: '100%',
     backgroundColor: color.cardLight,
     borderRadius: 6,
     marginBottom: 16,
@@ -166,8 +194,9 @@ const styles = StyleSheet.create({
   },
 
   cardDescription: {
-    color: "#aaa",
-    fontSize: 13,
+    fontFamily: 'Inter-Regular',
+    color: color.accentText,
+    fontSize: 12,
     marginBottom: 16,
   },
 
@@ -178,6 +207,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     alignItems: "center",
     marginBottom: 4,
+    marginTop: 'auto', 
   },
 
   buttonText: {
@@ -185,5 +215,23 @@ const styles = StyleSheet.create({
     color: "white",
     fontSize: 14,
   },
+
+  doubleTitle: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline'
+  },
+
+  showMore: {
+    fontSize: 14,
+    color: color.purple,
+  },
+
+  mainCard: {
+    borderRadius: 12,
+    paddingTop: spacing.m,
+    paddingHorizontal: spacing.m,
+    backgroundColor: color.card,
+  }
 
 })
