@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useState } from "react";
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import color from '../colors';
 import spacing from '../spacing';
@@ -10,7 +11,52 @@ import { StatBarsList } from "../components/stat_bar_list";
 import { StatTotals } from "../components/stat_totals";
 import { serveData } from "../data/serve_scores";
 
+import { Alert } from "react-native";
+import useBLE from "../utils/useBLE";
+
+import DeviceModal from "../components/BLE_overlay";
+
+
 export default function Index() {
+  
+  const { requestPermissions, scanForPeripherals, allDevices, stopDeviceScan, connectToDevice, disconnectFromDevice, disconnectAllDevices, connectedDevices, isConnecting, maxConnections } = useBLE();
+  const [isModalVisible, setModalVisible] = useState<boolean>(false);
+
+  // Debug logging for connectedDevices changes
+  console.log("Index render - connectedDevices:", connectedDevices.length, connectedDevices.map(d => d.name));
+
+  const handleConnect = async () => {
+    const granted = await requestPermissions();
+    console.log("granted", granted);
+    if(granted) {
+      stopDeviceScan();
+      scanForPeripherals();
+    } else {
+      Alert.alert("Permission Denied", "Please enable location permission to scan for peripherals");
+    }
+  }
+
+  const hideModal = () => {
+    setModalVisible(false);
+  }
+
+  const showModal = () => {
+    handleConnect();
+    setModalVisible(true);
+  }
+
+  // Get connection status text
+  const getConnectionStatus = () => {
+    console.log("getConnectionStatus called - connectedDevices:", connectedDevices.length);
+    if (connectedDevices.length === 0) {
+      return "Connect";
+    } else if (connectedDevices.length === maxConnections) {
+      return `Connected (${connectedDevices.length}/${maxConnections})`;
+    } else {
+      return `Connect (${connectedDevices.length}/${maxConnections})`;
+    }
+  }
+  
   return (
     <View style={styles.screen}>
       <View style = {styles.header}>
@@ -19,10 +65,37 @@ export default function Index() {
           <Text style={styles.name}>Patrick</Text>
         </View>
 
-        <TouchableOpacity style={styles.connectButton}>
-          <Ionicons name="bluetooth" size={18} color="white"/>
-          <Text style={styles.connectText}>Connect</Text>
+        <TouchableOpacity 
+          style={[
+            styles.connectButton
+          ]}
+          onPress={showModal}
+          disabled={isConnecting}
+        >
+          <Ionicons 
+            name="bluetooth" 
+            size={18} 
+            color={connectedDevices.length > 0 ? "#4CAF50" : "white"}
+          />
+          <Text style={[
+            styles.connectText,
+            connectedDevices.length > 0 && styles.connectTextConnected
+          ]}>
+            {isConnecting ? "Connecting..." : getConnectionStatus()}
+          </Text>
         </TouchableOpacity>
+
+        <DeviceModal
+          closeModal={hideModal}
+          visible={isModalVisible}
+          connectToPeripheral={connectToDevice}
+          disconnectFromPeripheral={disconnectFromDevice}
+          disconnectAllDevices={disconnectAllDevices}
+          devices={allDevices}
+          connectedDevices={connectedDevices}
+          maxConnections={maxConnections}
+          isConnecting={isConnecting}
+      />
       </View>
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.container}>
@@ -69,7 +142,7 @@ export default function Index() {
 const styles = StyleSheet.create({
   header: {
     width: '100%',
-    paddingHorizontal: 19,
+    paddingHorizontal: 28,
     paddingTop: 50,
     paddingBottom: 20,
     flexDirection: 'row',
@@ -99,13 +172,20 @@ const styles = StyleSheet.create({
   connectButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#343335',
-    paddingHorizontal: 16,
-    paddingVertical: 4,
+    backgroundColor: color.cardLight,
+    paddingHorizontal: 20,
+    paddingVertical: 8,
     borderRadius: 12,
   },
 
   connectText: {
+    color: 'white',
+    fontFamily: 'Inter-Regular',
+    fontSize: 14,
+    marginLeft: 8,
+  },
+
+  connectTextConnected: {
     color: 'white',
     fontFamily: 'Inter-Regular',
     fontSize: 14,
@@ -129,7 +209,7 @@ const styles = StyleSheet.create({
   },
 
   container: {
-    paddingHorizontal: 19,
+    paddingHorizontal: 28,
     paddingBottom: spacing.m,
   },
 
