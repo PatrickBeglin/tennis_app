@@ -1,9 +1,11 @@
-/* eslint-disable no-bitwise */
 import * as ExpoDevice from "expo-device";
 import { useEffect, useMemo, useState } from "react";
 import { PermissionsAndroid, Platform } from "react-native";
-import { BleError, BleManager, Device } from "react-native-ble-plx";
+import { BleError, BleManager, Characteristic, Device } from "react-native-ble-plx";
 
+
+const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
+const CHARACTERISTIC_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8"
 
 interface BluetoothLowEnergyApi {
     requestPermissions(): Promise<boolean>;
@@ -16,6 +18,7 @@ interface BluetoothLowEnergyApi {
     connectedDevices: Device[];
     isConnecting: boolean;
     maxConnections: number;
+    sensorData: {[deviceId: string]: any};
 }
 
 function useBLE(): BluetoothLowEnergyApi {
@@ -25,6 +28,11 @@ function useBLE(): BluetoothLowEnergyApi {
     const [connectedDevices, setConnectedDevices] = useState<Device[]>([]);
     const [isConnecting, setIsConnecting] = useState<boolean>(false);
     const maxConnections = 2; // Support for 2 ESP32s
+    // Store sensor data for each device in a dictionary with device id as key and any data as value 
+    // sensor data is a variable that stores the data from the tennis sensor
+    // setsensordata is a function that sets the sensor data
+    const [sensorData, setSensorData] = useState<{[deviceId: string]: any}>({}); // start with empty dictionary
+
 
     // Listen for unexpected disconnections
     useEffect(() => {
@@ -135,7 +143,7 @@ function useBLE(): BluetoothLowEnergyApi {
     /* scan for peripherals if permission is granted */
     const scanForPeripherals = () => {
         console.log("Starting BLE scan...");
-        bleManager.startDeviceScan(null, null, (error, device) => {
+        bleManager.startDeviceScan([SERVICE_UUID], null, (error, device) => {
             if (error) {
                 console.log("BLE Scan Error:", error);
             }
@@ -192,6 +200,8 @@ function useBLE(): BluetoothLowEnergyApi {
             
             setConnectedDevices(prev => [...prev, connected]);
             console.log(`Total connections: ${connectedDevices.length + 1}/${maxConnections}`);
+
+            startStreamingData(connected);
             
         } catch (e) {
             console.log("Connection error:", e);
@@ -252,6 +262,48 @@ function useBLE(): BluetoothLowEnergyApi {
         console.log("All devices disconnected");
     };
 
+    const onTennisDataUpdate = (
+        error: BleError | null,
+        characteristic: Characteristic | null
+    ) => {
+        if (error) {
+            console.log(error);
+            return;
+        } else if (!characteristic?.value) {
+            console.log("No Data was recieved");
+            return;
+        }
+
+        const rawData = Buffer.from(characteristic.value, 'base64').toString();
+
+        try {
+            const tennisData = JSON.parse(rawData);
+            console.log("Tennis Data:", tennisData);
+            setSensorData(prev => ({
+                ...prev,
+                // use the device id as the key
+                [tennisData.device_id]: tennisData // SEND DEVICE_ID FROM ESP32 
+            }));
+        } catch (e) {
+            console.log("Error parsing tennis data:", e);
+        }
+    }
+
+    
+
+    const startStreamingData = async (device: Device) => {
+        if (device) {
+          device.monitorCharacteristicForService(
+            SERVICE_UUID,
+            CHARACTERISTIC_UUID,
+            onTennisDataUpdate
+          );
+          console.log("Started streaming data from:", device.name);
+        } else {
+          console.log("No Device Connected");
+        }
+      };
+
     return {
         scanForPeripherals,
         requestPermissions,
@@ -263,6 +315,7 @@ function useBLE(): BluetoothLowEnergyApi {
         connectedDevices,
         isConnecting,
         maxConnections,
+        sensorData,
     }
 }
 
