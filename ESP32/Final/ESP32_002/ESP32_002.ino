@@ -68,7 +68,6 @@ void setup() {
                       CHARACTERISTIC_UUID,
                       BLECharacteristic::PROPERTY_READ   |
                       BLECharacteristic::PROPERTY_WRITE  |
-                      BLECharacteristic::PROPERTY_NOTIFY |
                       BLECharacteristic::PROPERTY_INDICATE
                     );
 
@@ -85,34 +84,139 @@ void setup() {
   pAdvertising->setMinPreferred(0x0);  // set value to 0x00 to not advertise this parameter
   BLEDevice::startAdvertising();
   Serial.println("Waiting a client connection to notify...");
-
-
-
 }
+
+
+static const int bufferSize = 400;
+imu::Vector<3> buffer[bufferSize];
+int head = 0;
+
+bool swingActive = false;
+int swingStartIndex = 0;
+int swingEndIndex = 0;
+unsigned long lastSwingTime = 0;  // Add cooldown tracking
+const unsigned long SWING_COOLDOWN_MS = 2000;  // 2 second cooldown
+const int MIN_SWING_DURATION = 5;  // Minimum 5 samples for a swing (reduced from 20)
+int swingSampleCount = 0;  // Track samples during swing
+
+bool swingDetected(){
+  // Check cooldown first
+  if (millis() - lastSwingTime < SWING_COOLDOWN_MS) {
+    return false;
+  }
+
+  // get the previous and ten back values
+  // wraps around bufferSize
+  int prev = (head - 1 + bufferSize) % bufferSize;
+  int tenBack = (head - 10 + bufferSize) % bufferSize;
+
+  auto curr = buffer[prev];    
+  auto earlier = buffer[tenBack]; 
+
+  // Increase threshold to 80 degrees for more realistic swing detection
+  if (fabs(curr.x() - earlier.x()) > 100.0 ||
+      fabs(curr.y() - earlier.y()) > 100.0 ||
+      fabs(curr.z() - earlier.z()) > 100.0) {
+    return true;
+  }
+  return false;
+}
+
+void sendSwingData(int startIndex, int endIndex) {
+  // Only send if swing has enough samples
+  int swingLength = (endIndex - startIndex + bufferSize) % bufferSize;
+  if (swingLength < MIN_SWING_DURATION) {
+    Serial.println("Swing too short, ignoring");
+    return;
+  }
+
+  DynamicJsonDocument doc(4000);  // Larger for batch data
+  
+  // Add device_id field
+  doc["device_id"] = "ESP32_002";
+  
+  // Create swing array
+  JsonArray swingArray = doc.createNestedArray("swing");
+  
+  // Loop through buffer from start to end
+  int currentIndex = startIndex;
+  int count = 0;
+  while (currentIndex != endIndex && count < bufferSize) {
+    JsonObject point = swingArray.createNestedObject();
+    point["i"] = currentIndex;
+    point["x"] = (int)buffer[currentIndex].x();
+    point["y"] = (int)buffer[currentIndex].y();
+    point["z"] = (int)buffer[currentIndex].z();
+    
+    currentIndex = (currentIndex + 1) % bufferSize;  // Wrap around if needed
+    count++;
+  }
+  
+  String dataJson;
+  serializeJson(doc, dataJson);
+  
+  // Add delay to prevent overwhelming BLE stack
+  delay(50);
+  
+  pCharacteristic->setValue((uint8_t*)dataJson.c_str(), dataJson.length());
+  pCharacteristic->indicate();
+  
+  Serial.print("Sent swing data: ");
+  Serial.print(swingLength);
+  Serial.println(" samples");
+}
+
 
 void loop() {
   // get sensor data
   imu::Vector<3> euler = bno.getVector(Adafruit_BNO055::VECTOR_EULER);
 
-  DynamicJsonDocument doc(200);
-  doc["i"] = "2";
-  doc["x"] = (int)euler.x();
-  doc["y"] = (int)euler.y();
-  doc["z"] = (int)euler.z();
+  buffer[head] = euler;  // Store current reading
+  head = (head + 1) % bufferSize;  // Move head pointer
+
+  if (swingDetected() && !swingActive) {
+    Serial.println("Swing detected");
+    swingActive = true;
+    swingStartIndex = (head - 1 + bufferSize) % bufferSize; // Start at the position where swing was detected
+    swingSampleCount = 0;  // Reset sample counter
+  }
+
+  if (swingActive) {
+    swingSampleCount++;  // Count samples during swing
+    
+    if (!swingDetected()) {
+      swingActive = false;
+      swingEndIndex = (head - 1 + bufferSize) % bufferSize; // End at the position where swing ended
+      lastSwingTime = millis();  // Set cooldown timer
+      
+      Serial.print("Swing ended. Duration: ");
+      Serial.print(swingSampleCount);
+      Serial.println(" samples");
+      
+      sendSwingData(swingStartIndex, swingEndIndex);
+    }
+  }
+
+
+  //DynamicJsonDocument doc(200);
+  //doc["i"] = "2";
+  //doc["x"] = (int)euler.x();
+  //doc["y"] = (int)euler.y();
+  //doc["z"] = (int)euler.z();
   // add these for calibration issues if needed
   //doc["sys"] = system;
   //doc["gyro"] = gyro;
   //doc["accel"] = accel;
   //doc["mag"] = mag;
-  String dataJson;
-  serializeJson(doc, dataJson); // creates dataJson variable
-  dataJson += "\n"; // newline for fragmentation handling
+  //String dataJson;
+  //serializeJson(doc, dataJson); // creates dataJson variable
+  //dataJson += "\n"; // newline for fragmentation handling
 
   // notify changed value
   if (deviceConnected) {
       //Serial.println("sending data");
-      pCharacteristic->setValue((uint8_t*)dataJson.c_str(), dataJson.length());
-      pCharacteristic->notify(); 
+      // pCharacteristic->setValue((uint8_t*)dataJson.c_str(), dataJson.length());
+      //pCharacteristic->notify(); 
       delay(BNO055_SAMPLERATE_DELAY_MS);
   }
   // disconnecting

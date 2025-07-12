@@ -198,6 +198,14 @@ function useBLE(): BluetoothLowEnergyApi {
             }
             console.log(`Successfully connected to: ${connected.name}`);
             
+            // Request larger MTU for better data transfer
+            try {
+                await connected.requestMTU(512);
+                console.log("MTU increased to 512 bytes");
+            } catch (e) {
+                console.log("Failed to increase MTU:", e);
+            }
+            
             setConnectedDevices(prev => [...prev, connected]);
             console.log(`Total connections: ${connectedDevices.length + 1}/${maxConnections}`);
 
@@ -267,19 +275,33 @@ function useBLE(): BluetoothLowEnergyApi {
         characteristic: Characteristic | null
     ) => {
         if (error) {
-            console.log(error);
+            console.log("BLE Error:", error);
             return;
         } else if (!characteristic?.value) {
-            console.log("No Data was recieved");
+            console.log("No Data was received");
             return;
         }
 
         const rawData = Buffer.from(characteristic.value, 'base64').toString();
+        console.log("Raw data length:", rawData.length);
         console.log("Raw data:", rawData);
+
+        // Check if data looks like valid JSON
+        if (!rawData.trim().startsWith('{')) {
+            console.log("Data doesn't start with '{', might be fragmented");
+            return;
+        }
 
         try {
             const tennisData = JSON.parse(rawData);
             console.log("Tennis Data:", tennisData);
+            
+            // Validate required fields
+            if (!tennisData.device_id || !tennisData.swing) {
+                console.log("Missing required fields in tennis data");
+                return;
+            }
+            
             setSensorData(prev => ({
                 ...prev,
                 // use the device id as the key
@@ -287,6 +309,7 @@ function useBLE(): BluetoothLowEnergyApi {
             }));
         } catch (e) {
             console.log("Error parsing tennis data:", e);
+            console.log("Raw data that failed to parse:", rawData);
         }
     }
 
@@ -299,11 +322,12 @@ function useBLE(): BluetoothLowEnergyApi {
                 const discoveredDevice = await device.discoverAllServicesAndCharacteristics();
                 console.log("✅ Services discovered");
                 
-                // Now try to monitor the characteristic
+                // Now try to monitor the characteristic for indications
                 const subscription = discoveredDevice.monitorCharacteristicForService(
                   SERVICE_UUID,
                   CHARACTERISTIC_UUID,
-                  onTennisDataUpdate
+                  onTennisDataUpdate,
+                  'indication'
                 );
                 console.log("✅ Started streaming data from:", device.name);
                 console.log("Subscription object:", subscription);
