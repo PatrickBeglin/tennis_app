@@ -13,8 +13,8 @@ BLECharacteristic* pCharacteristic = NULL;
 bool deviceConnected = false;
 bool oldDeviceConnected = false;
 
-// 10hz
-#define BNO055_SAMPLERATE_DELAY_MS (100)
+// 50hz - reduced to prevent packet overlap
+#define BNO055_SAMPLERATE_DELAY_MS (20)
 Adafruit_BNO055 bno = Adafruit_BNO055(-1, 0x28, &Wire);
 
 #define SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
@@ -53,7 +53,8 @@ void setup() {
 
 
   // Create the BLE Device
-  BLEDevice::init("ESP32_001");
+  BLEDevice::init("ESP32_002");
+  BLEDevice::setMTU(512);
 
   // Create the BLE Server
   pServer = BLEDevice::createServer();
@@ -94,10 +95,10 @@ void loop() {
   imu::Vector<3> euler = bno.getVector(Adafruit_BNO055::VECTOR_EULER);
 
   DynamicJsonDocument doc(200);
-  doc["device_id"] = "ESP32_001";
-  doc["x"] = euler.x();
-  doc["y"] = euler.y();
-  doc["z"] = euler.z();
+  doc["i"] = "2";
+  doc["x"] = (int)euler.x();
+  doc["y"] = (int)euler.y();
+  doc["z"] = (int)euler.z();
   // add these for calibration issues if needed
   //doc["sys"] = system;
   //doc["gyro"] = gyro;
@@ -105,20 +106,18 @@ void loop() {
   //doc["mag"] = mag;
   String dataJson;
   serializeJson(doc, dataJson); // creates dataJson variable
-  dataJson += "\n"; //newline for fragmentation handling
-
+  dataJson += "\n"; // newline for fragmentation handling
 
   // notify changed value
   if (deviceConnected) {
-      Serial.println(dataJson);
+      //Serial.println("sending data");
       pCharacteristic->setValue((uint8_t*)dataJson.c_str(), dataJson.length());
-      pCharacteristic->notify();
-      // 10hz
+      pCharacteristic->notify(); 
       delay(BNO055_SAMPLERATE_DELAY_MS);
   }
   // disconnecting
   if (!deviceConnected && oldDeviceConnected) {
-      Serial.println("disconnecting");
+      //Serial.println("disconnecting");
       delay(500); // give the bluetooth stack the chance to get things ready
       pServer->startAdvertising(); // restart advertising
       Serial.println("start advertising");

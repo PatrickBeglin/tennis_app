@@ -1,11 +1,16 @@
 import { StyleSheet, Text, View } from "react-native";
+import { useSensorData } from "../utils/useBLE";
+
+
 
 export default function AboutScreen() {
+  const rawData = useSensorData();
+  const sensorData = JSON.stringify(rawData);
   return (
     <View
       style = {styles.container}
     >
-      <Text style={styles.text}>about me</Text>
+      <Text style={styles.text}>{sensorData}</Text>
     </View>
   );
 }

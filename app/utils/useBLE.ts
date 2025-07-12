@@ -1,3 +1,4 @@
+import { Buffer } from "buffer";
 import * as ExpoDevice from "expo-device";
 import { useEffect, useMemo, useState } from "react";
 import { PermissionsAndroid, Platform } from "react-native";
@@ -32,6 +33,7 @@ function useBLE(): BluetoothLowEnergyApi {
     // sensor data is a variable that stores the data from the tennis sensor
     // setsensordata is a function that sets the sensor data
     const [sensorData, setSensorData] = useState<{[deviceId: string]: any}>({}); // start with empty dictionary
+    console.log("sensorData", sensorData);
 
 
     // Listen for unexpected disconnections
@@ -143,19 +145,17 @@ function useBLE(): BluetoothLowEnergyApi {
     /* scan for peripherals if permission is granted */
     const scanForPeripherals = () => {
         console.log("Starting BLE scan...");
-        bleManager.startDeviceScan([SERVICE_UUID], null, (error, device) => {
+        // only search for my esp32s
+        bleManager.startDeviceScan(null, null, (error, device) => {
             if (error) {
                 console.log("BLE Scan Error:", error);
             }
             if (device) {
-                console.log("Found device:", device.name || "Unnamed", "ID:", device.id, "RSSI:", device.rssi);
                 if (device.name) {
                     setAllDevices((prevState: Device[]) => {
                         if (!isDuplicateDevice(prevState, device)) {
-                            console.log("Adding new device to list:", device.name);
                             return [...prevState, device];
                         } else {
-                            console.log("Device already in list:", device.name);
                             return prevState;
                         }
                     });
@@ -275,6 +275,7 @@ function useBLE(): BluetoothLowEnergyApi {
         }
 
         const rawData = Buffer.from(characteristic.value, 'base64').toString();
+        console.log("Raw data:", rawData);
 
         try {
             const tennisData = JSON.parse(rawData);
@@ -289,20 +290,32 @@ function useBLE(): BluetoothLowEnergyApi {
         }
     }
 
-    
 
     const startStreamingData = async (device: Device) => {
         if (device) {
-          device.monitorCharacteristicForService(
-            SERVICE_UUID,
-            CHARACTERISTIC_UUID,
-            onTennisDataUpdate
-          );
-          console.log("Started streaming data from:", device.name);
+            try {
+                // First, discover services on the device
+                console.log("🔍 Discovering services...");
+                const discoveredDevice = await device.discoverAllServicesAndCharacteristics();
+                console.log("✅ Services discovered");
+                
+                // Now try to monitor the characteristic
+                const subscription = discoveredDevice.monitorCharacteristicForService(
+                  SERVICE_UUID,
+                  CHARACTERISTIC_UUID,
+                  onTennisDataUpdate
+                );
+                console.log("✅ Started streaming data from:", device.name);
+                console.log("Subscription object:", subscription);
+            } catch (error) {
+                console.log("❌ Error starting streaming:", error);
+            }
         } else {
-          console.log("No Device Connected");
+            console.log("No device to start streaming from");
         }
       };
+
+
 
     return {
         scanForPeripherals,
@@ -319,4 +332,13 @@ function useBLE(): BluetoothLowEnergyApi {
     }
 }
 
+
+
 export default useBLE;
+
+export function useSensorData() {
+    const { sensorData } = useBLE();
+    return sensorData;
+} 
+
+
