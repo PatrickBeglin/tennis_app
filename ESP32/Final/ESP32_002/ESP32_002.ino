@@ -6,7 +6,6 @@
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BNO055.h>
 #include <utility/imumaths.h>
-#include <ArduinoJson.h>
 
 BLEServer* pServer = NULL;
 BLECharacteristic* pCharacteristic = NULL;
@@ -130,40 +129,42 @@ void sendSwingData(int startIndex, int endIndex) {
     return;
   }
 
-  DynamicJsonDocument doc(4000);  // Larger for batch data
+  static uint8_t swingIdCounter = 0;
+  uint8_t swingId = swingIdCounter++;
   
-  // Add device_id field
-  doc["device_id"] = "ESP32_002";
-  
-  // Create swing array
-  JsonArray swingArray = doc.createNestedArray("swing");
-  
-  // Loop through buffer from start to end
-  int currentIndex = startIndex;
-  int count = 0;
-  while (currentIndex != endIndex && count < bufferSize) {
-    JsonObject point = swingArray.createNestedObject();
-    point["i"] = currentIndex;
-    point["x"] = (int)buffer[currentIndex].x();
-    point["y"] = (int)buffer[currentIndex].y();
-    point["z"] = (int)buffer[currentIndex].z();
+  int maxPoints = 82;
+  int pointsToSend = min(swingLength, maxPoints); // cuts off long swings
+
+  //create binary packet 500bytes
+  uint8_t binaryData[500];
+  int dataIndex = 0;
+
+  binaryData[dataIndex++] = 0x02; // the id for master
+  binaryData[dataIndex++] = swingId; // id for the swing
+  binaryData[dataIndex++] = pointsToSend; // number of points to send
+
+  // convert to binary
+  int currentIndex = startIndex; // where to start reading from buffer
+  int count = 0; // how many points weve processed
+
+  // loops each data point in the swing and stops at endIndex
+  while (count < pointsToSend && currentIndex != endIndex) {
+    // Timestamp (2 bytes - milliseconds since swing start)
+    unsigned long timestamp = count * 20; // 0, 20, 40, 60... ms at 50Hz
+    binaryData[dataIndex++] = (timestamp >> 8) & 0xFF;  // High byte
+    binaryData[dataIndex++] = timestamp & 0xFF;// Low byte
     
-    currentIndex = (currentIndex + 1) % bufferSize;  // Wrap around if needed
+    // X, Y, Z values (3 bytes, signed)
+    binaryData[dataIndex++] = (int8_t)buffer[currentIndex].x();
+    binaryData[dataIndex++] = (int8_t)buffer[currentIndex].y();
+    binaryData[dataIndex++] = (int8_t)buffer[currentIndex].z();
+    
+    currentIndex = (currentIndex + 1) % bufferSize;
     count++;
   }
-  
-  String dataJson;
-  serializeJson(doc, dataJson);
-  
-  // Add delay to prevent overwhelming BLE stack
-  delay(50);
-  
-  pCharacteristic->setValue((uint8_t*)dataJson.c_str(), dataJson.length());
+
+  pCharacteristic->setValue(binaryData, dataIndex);
   pCharacteristic->indicate();
-  
-  Serial.print("Sent swing data: ");
-  Serial.print(swingLength);
-  Serial.println(" samples");
 }
 
 
@@ -197,20 +198,6 @@ void loop() {
     }
   }
 
-
-  //DynamicJsonDocument doc(200);
-  //doc["i"] = "2";
-  //doc["x"] = (int)euler.x();
-  //doc["y"] = (int)euler.y();
-  //doc["z"] = (int)euler.z();
-  // add these for calibration issues if needed
-  //doc["sys"] = system;
-  //doc["gyro"] = gyro;
-  //doc["accel"] = accel;
-  //doc["mag"] = mag;
-  //String dataJson;
-  //serializeJson(doc, dataJson); // creates dataJson variable
-  //dataJson += "\n"; // newline for fragmentation handling
 
   // notify changed value
   if (deviceConnected) {
