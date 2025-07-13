@@ -6,6 +6,12 @@
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BNO055.h>
 #include <utility/imumaths.h>
+#include <esp_now.h>
+#include <WiFi.h>
+
+uint8_t slaveAddress[] = {0xE8, 0x6B, 0xEA, 0x2F, 0xE8, 0x48};
+esp_now_peer_info_t peerInfo;
+
 
 BLEServer* pServer = NULL;
 BLECharacteristic* pCharacteristic = NULL;
@@ -32,27 +38,17 @@ class MyServerCallbacks: public BLEServerCallbacks {
 void setup() {
   Wire.begin(22, 19);
   Serial.begin(115200);
-  Serial.println("go");
-  delay(3000);  // Let USB settle
-  Serial.println("✅ Serial is working");
-
-  while (!Serial) delay(10);  // wait for serial port to open!
-
-  Serial.println("Orientation Sensor Raw Data Test"); Serial.println("");
-
-  /* Initialise the sensor */
-  if(!bno.begin())
-  {
-    /* There was a problem detecting the BNO055 ... check your connections */
-    Serial.print("Ooops, no BNO055 detected ... Check your wiring or I2C ADDR!");
-  } else {
-    Serial.println("BNO055 detected");
-  }
   delay(1000);
+  
+  if(!bno.begin()) {
+    Serial.println("BNO055 error");
+  } else {
+    Serial.println("BNO055 OK");
+  }
 
 
   // Create the BLE Device
-  BLEDevice::init("ESP32_002");
+  BLEDevice::init("ESP32_MASTER");
   BLEDevice::setMTU(512);
 
   // Create the BLE Server
@@ -62,31 +58,41 @@ void setup() {
   // Create the BLE Service
   BLEService *pService = pServer->createService(SERVICE_UUID);
 
-  // Create a BLE Characteristic
+  // Create a BLE Characteristic (simplified)
   pCharacteristic = pService->createCharacteristic(
                       CHARACTERISTIC_UUID,
-                      BLECharacteristic::PROPERTY_READ   |
-                      BLECharacteristic::PROPERTY_WRITE  |
                       BLECharacteristic::PROPERTY_INDICATE
                     );
-
-  // Create a BLE Descriptor
-  pCharacteristic->addDescriptor(new BLE2902());
 
   // Start the service
   pService->start();
 
-  // Start advertising
-  BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
-  pAdvertising->addServiceUUID(SERVICE_UUID);
-  pAdvertising->setScanResponse(false);
-  pAdvertising->setMinPreferred(0x0);  // set value to 0x00 to not advertise this parameter
+  // Start advertising (simplified)
+  BLEDevice::getAdvertising()->addServiceUUID(SERVICE_UUID);
   BLEDevice::startAdvertising();
-  Serial.println("Waiting a client connection to notify...");
+  Serial.println("BLE ready");
+
+  WiFi.mode(WIFI_STA);
+  if (esp_now_init() != ESP_OK) {
+    Serial.println("ESP-NOW error");
+    return;
+  }
+
+  esp_now_register_recv_cb(OnDataRecv);
+  memcpy(peerInfo.peer_addr, slaveAddress, 6);
+  peerInfo.channel = 0;  
+  peerInfo.encrypt = false;
+
+  if (esp_now_add_peer(&peerInfo) != ESP_OK){
+    Serial.println("Peer error");
+    return;
+  }
+
+  Serial.println("Ready");
 }
 
 
-static const int bufferSize = 400;
+static const int bufferSize = 400; // Reduced from 400 to save memory
 imu::Vector<3> buffer[bufferSize];
 int head = 0;
 
@@ -125,12 +131,16 @@ void sendSwingData(int startIndex, int endIndex) {
   // Only send if swing has enough samples
   int swingLength = (endIndex - startIndex + bufferSize) % bufferSize;
   if (swingLength < MIN_SWING_DURATION) {
-    Serial.println("Swing too short, ignoring");
     return;
   }
 
   static uint8_t swingIdCounter = 0;
   uint8_t swingId = swingIdCounter++;
+
+  sendTriggerToSlave();
+  
+  // Give slave time to record data (swing duration + buffer)
+  delay(100); // Small delay to ensure slave has started recording
   
   int maxPoints = 82;
   int pointsToSend = min(swingLength, maxPoints); // cuts off long swings
@@ -165,7 +175,44 @@ void sendSwingData(int startIndex, int endIndex) {
 
   pCharacteristic->setValue(binaryData, dataIndex);
   pCharacteristic->indicate();
+  requestDataFromSlave(swingId, pointsToSend);
 }
+
+void sendTriggerToSlave() {
+  uint8_t triggerData[1] = {0x01}; // Command to start recording
+  
+  esp_err_t result = esp_now_send(slaveAddress, triggerData, 1);
+  if (result == ESP_OK) {
+    Serial.println("Trigger sent");
+  } else {
+    Serial.println("Trigger error");
+  }
+}
+
+void requestDataFromSlave(uint8_t swingId, uint8_t pointsToSend) {
+  uint8_t requestData[3] = {0x02, swingId, pointsToSend}; // Command, swing ID, points
+  
+  esp_err_t result = esp_now_send(slaveAddress, requestData, 3);
+  if (result == ESP_OK) {
+    Serial.println("Request sent");
+  } else {
+    Serial.println("Request error");
+  }
+}
+
+void OnDataRecv(const esp_now_recv_info *info, const uint8_t *incomingData, int len) {
+  if (incomingData[0] == 0x03) {
+    uint8_t swingId = incomingData[1];
+    uint8_t pointsReceived = incomingData[2];
+    Serial.print("Slave: ");
+    Serial.print(swingId);
+    Serial.print(",");
+    Serial.println(pointsReceived);
+  }
+}
+
+
+
 
 
 void loop() {
@@ -176,10 +223,10 @@ void loop() {
   head = (head + 1) % bufferSize;  // Move head pointer
 
   if (swingDetected() && !swingActive) {
-    Serial.println("Swing detected");
+    Serial.println("Swing start");
     swingActive = true;
-    swingStartIndex = (head - 1 + bufferSize) % bufferSize; // Start at the position where swing was detected
-    swingSampleCount = 0;  // Reset sample counter
+    swingStartIndex = (head - 1 + bufferSize) % bufferSize;
+    swingSampleCount = 0;
   }
 
   if (swingActive) {
@@ -190,9 +237,8 @@ void loop() {
       swingEndIndex = (head - 1 + bufferSize) % bufferSize; // End at the position where swing ended
       lastSwingTime = millis();  // Set cooldown timer
       
-      Serial.print("Swing ended. Duration: ");
-      Serial.print(swingSampleCount);
-      Serial.println(" samples");
+      Serial.print("Swing end: ");
+      Serial.println(swingSampleCount);
       
       sendSwingData(swingStartIndex, swingEndIndex);
     }
@@ -208,15 +254,12 @@ void loop() {
   }
   // disconnecting
   if (!deviceConnected && oldDeviceConnected) {
-      //Serial.println("disconnecting");
-      delay(500); // give the bluetooth stack the chance to get things ready
-      pServer->startAdvertising(); // restart advertising
-      Serial.println("start advertising");
+      delay(500);
+      pServer->startAdvertising();
       oldDeviceConnected = deviceConnected;
   }
   // connecting
   if (deviceConnected && !oldDeviceConnected) {
-      // do stuff here on connecting
       oldDeviceConnected = deviceConnected;
   }
 }

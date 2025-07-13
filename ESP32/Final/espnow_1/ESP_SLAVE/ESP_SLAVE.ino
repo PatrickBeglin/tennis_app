@@ -1,5 +1,32 @@
 #include <esp_now.h>
 #include <WiFi.h>
+#include <Wire.h>
+#include <Adafruit_Sensor.h>
+#include <Adafruit_BNO055.h>
+#include <utility/imumaths.h>
+#include <BLEDevice.h>
+#include <BLEServer.h>
+#include <BLEUtils.h>
+#include <BLE2902.h>
+
+//ble stuff
+BLEServer* pServer = NULL;
+
+#define SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
+#define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
+
+BLECharacteristic* pCharacteristic = NULL;
+bool deviceConnected = false;
+
+class MyServerCallbacks: public BLEServerCallbacks {
+  void onConnect(BLEServer* pServer) {
+    deviceConnected = true;
+  };
+
+  void onDisconnect(BLEServer* pServer) {
+    deviceConnected = false;
+  }
+};
 
 // MAC Address of the master ESP32
 uint8_t broadcastAddress[] = {0xE8, 0x6B, 0xEA, 0x2F, 0xE8, 0x08}; 
@@ -29,7 +56,7 @@ void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
 }
 
 // Callback when data is received
-void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
+void OnDataRecv(const esp_now_recv_info *info, const uint8_t *incomingData, int len) {
   Serial.print("ping received stating to record data");
   
   // Process your tennis data here
@@ -43,6 +70,7 @@ void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
     Serial.println("Received data request");
     uint8_t swingId = incomingData[1]; // Get swing ID from master
     uint8_t pointsToSend = incomingData[2]; // Get number of points to send from master
+
     sendData(swingId, pointsToSend);
   }
 }
@@ -59,12 +87,20 @@ void sendData(uint8_t swingId, uint8_t pointsToSend) {
   uint8_t binaryData[250]; // ESP-NOW limit
   int dataIndex = 0;
 
-  binaryData[dataIndex++] = 0x03; // Slave device ID
+  binaryData[dataIndex++] = 0x03; // 03 for slave
   binaryData[dataIndex++] = swingId; // Swing ID from master
   
   // Limit points to send based on available data and ESP-NOW limit
-  int actualPointsToSend = min(min(pointsToSend, head), 82);
+  int actualPointsToSend = min(min((int)pointsToSend, head), 82);
   binaryData[dataIndex++] = actualPointsToSend; // Number of points
+  
+  Serial.print("Slave has ");
+  Serial.print(head);
+  Serial.print(" points, requested ");
+  Serial.print(pointsToSend);
+  Serial.print(", sending ");
+  Serial.print(actualPointsToSend);
+  Serial.println(" points");
 
   // Send data starting from index 0 (since we reset the buffer)
   for (int i = 0; i < actualPointsToSend; i++) {
@@ -79,13 +115,10 @@ void sendData(uint8_t swingId, uint8_t pointsToSend) {
     binaryData[dataIndex++] = (int8_t)buffer[i].z();
   }
 
-  // Send via ESP-NOW
-  esp_err_t result = esp_now_send(broadcastAddress, binaryData, dataIndex);
-  if (result == ESP_OK) {
-    Serial.println("Data sent successfully");
-  } else {
-    Serial.println("Error sending data");
-  }
+  // Send via ble to phone
+  delay(1000); // delay to stop interference with other esp
+  pCharacteristic->setValue(binaryData, dataIndex);
+  pCharacteristic->indicate();
 }
 
 
@@ -105,6 +138,32 @@ void setup() {
     Serial.println("BNO055 detected");
   }
   delay(1000);
+
+  // Create the BLE Device
+  BLEDevice::init("ESP32_SLAVE");
+  BLEDevice::setMTU(512);
+
+  // Create the BLE Server
+  pServer = BLEDevice::createServer();
+  pServer->setCallbacks(new MyServerCallbacks());
+
+  // Create the BLE Service
+  BLEService *pService = pServer->createService(SERVICE_UUID);
+
+  // Create a BLE Characteristic (simplified)
+  pCharacteristic = pService->createCharacteristic(
+                      CHARACTERISTIC_UUID,
+                      BLECharacteristic::PROPERTY_INDICATE
+                    );
+
+  // Start the service
+  pService->start();
+
+  // Start advertising (simplified)
+  BLEDevice::getAdvertising()->addServiceUUID(SERVICE_UUID);
+  BLEDevice::startAdvertising();
+  Serial.println("BLE ready");
+
 
   // Set device as a Wi-Fi Station
   WiFi.mode(WIFI_STA);

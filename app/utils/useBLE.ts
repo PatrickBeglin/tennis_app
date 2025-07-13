@@ -315,6 +315,8 @@ function useBLE(): BluetoothLowEnergyApi {
         const swingId = buffer[offset++];
         const pointsToSend = buffer[offset++];
 
+
+
         const swingData = [];
 
         for (let i = 0; i < pointsToSend; i++) {
@@ -333,13 +335,31 @@ function useBLE(): BluetoothLowEnergyApi {
                 y: y,
                 z: z,
             })
-        }
 
-        return {
-            device_id: "ESP32_002",
-            swing_id: swingId,
-            swing: swingData,
+            
         }
+        if (deviceId === 0x03) {
+            return {
+                device_id: "ESP32_SLAVE",
+                swing_id: swingId,
+                swing: swingData,
+            }
+        }
+        else if (deviceId === 0x02) {
+            return {
+                device_id: "ESP32_MASTER",
+                swing_id: swingId,
+                swing: swingData,
+            }
+        }
+        else {
+            return {
+                device_id: "UNKNOWN",
+                swing_id: swingId,
+                swing: swingData,
+            }
+        }
+        
     }
 
 
