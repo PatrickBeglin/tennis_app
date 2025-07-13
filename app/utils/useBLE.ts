@@ -282,36 +282,66 @@ function useBLE(): BluetoothLowEnergyApi {
             return;
         }
 
-        const rawData = Buffer.from(characteristic.value, 'base64').toString();
+        const rawData = Buffer.from(characteristic.value, 'base64');
         console.log("Raw data length:", rawData.length);
         console.log("Raw data:", rawData);
 
-        // Check if data looks like valid JSON
-        if (!rawData.trim().startsWith('{')) {
-            console.log("Data doesn't start with '{', might be fragmented");
-            return;
-        }
-
         try {
-            const tennisData = JSON.parse(rawData);
-            console.log("Tennis Data:", tennisData);
-            
-            // Validate required fields
-            if (!tennisData.device_id || !tennisData.swing) {
-                console.log("Missing required fields in tennis data");
-                return;
+            const deviceId = rawData[0];
+
+            if (deviceId === 0x02) {
+                const tennisData = processBinaryData(rawData);
+                console.log("Tennis Data:", tennisData);
+
+                setSensorData(prev => ({
+                    ...prev,
+                    [tennisData.device_id]: tennisData
+                }));
+
+            } else {
+                console.log("ERROR Unknown device ID:", deviceId);
             }
-            
-            setSensorData(prev => ({
-                ...prev,
-                // use the device id as the key
-                [tennisData.device_id]: tennisData // SEND DEVICE_ID FROM ESP32 
-            }));
         } catch (e) {
-            console.log("Error parsing tennis data:", e);
+            console.log("Error processing data:", e);
             console.log("Raw data that failed to parse:", rawData);
         }
+    } 
+
+
+    const processBinaryData = (buffer: Buffer) => { // buffer will be rawdata
+        let offset = 0; // current position in the buffer
+
+        const deviceId = buffer[offset++]; // reads byte 0 then 1 etc
+        const swingId = buffer[offset++];
+        const pointsToSend = buffer[offset++];
+
+        const swingData = [];
+
+        for (let i = 0; i < pointsToSend; i++) {
+
+            const timestamp = (buffer[offset] << 8) | buffer[offset + 1]; // reconstructs timestamp
+            offset += 2;
+
+            const x = buffer.readInt8(offset++);
+            const y = buffer.readInt8(offset++);
+            const z = buffer.readInt8(offset++);
+
+            swingData.push({
+                i: i,
+                timestamp: timestamp,
+                x: x,
+                y: y,
+                z: z,
+            })
+        }
+
+        return {
+            device_id: "ESP32_002",
+            swing_id: swingId,
+            swing: swingData,
+        }
     }
+
 
 
     const startStreamingData = async (device: Device) => {
