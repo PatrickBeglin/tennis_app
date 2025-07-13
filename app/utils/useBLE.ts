@@ -6,7 +6,8 @@ import { BleError, BleManager, Characteristic, Device } from "react-native-ble-p
 
 
 const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
-const CHARACTERISTIC_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8"
+const MASTER_CHARACTERISTIC_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8"  // Master
+const SLAVE_CHARACTERISTIC_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a9"   // Slave
 
 interface BluetoothLowEnergyApi {
     requestPermissions(): Promise<boolean>;
@@ -291,13 +292,21 @@ function useBLE(): BluetoothLowEnergyApi {
 
             if (deviceId === 0x02) {
                 const tennisData = processBinaryData(rawData);
-                console.log("Tennis Data:", tennisData);
+                console.log("MASTERTennis Data:", tennisData);
 
                 setSensorData(prev => ({
                     ...prev,
                     [tennisData.device_id]: tennisData
                 }));
 
+            } else if (deviceId === 0x03) {
+                const tennisData = processBinaryData(rawData);
+                console.log("SLAVE Tennis Data:", tennisData);
+
+                setSensorData(prev => ({
+                    ...prev,
+                    [tennisData.device_id]: tennisData
+                }));
             } else {
                 console.log("ERROR Unknown device ID:", deviceId);
             }
@@ -367,28 +376,35 @@ function useBLE(): BluetoothLowEnergyApi {
     const startStreamingData = async (device: Device) => {
         if (device) {
             try {
-                // First, discover services on the device
                 console.log("🔍 Discovering services...");
                 const discoveredDevice = await device.discoverAllServicesAndCharacteristics();
                 console.log("✅ Services discovered");
                 
-                // Now try to monitor the characteristic for indications
-                const subscription = discoveredDevice.monitorCharacteristicForService(
-                  SERVICE_UUID,
-                  CHARACTERISTIC_UUID,
-                  onTennisDataUpdate,
-                  'indication'
-                );
-                console.log("✅ Started streaming data from:", device.name);
-                console.log("Subscription object:", subscription);
+                // Monitor based on device name
+                if (device.name === "ESP32_MASTER") {
+                    const subscription = discoveredDevice.monitorCharacteristicForService(
+                        SERVICE_UUID,
+                        MASTER_CHARACTERISTIC_UUID,
+                        onTennisDataUpdate,
+                        'indication'
+                    );
+                    console.log("✅ Started streaming MASTER data from:", device.name);
+                } else if (device.name === "ESP32_SLAVE") {
+                    const subscription = discoveredDevice.monitorCharacteristicForService(
+                        SERVICE_UUID,
+                        SLAVE_CHARACTERISTIC_UUID,
+                        onTennisDataUpdate,
+                        'notification'
+                    );
+                    console.log("✅ Started streaming SLAVE data from:", device.name);
+                }
             } catch (error) {
                 console.log("❌ Error starting streaming:", error);
             }
         } else {
             console.log("No device to start streaming from");
         }
-      };
-
+    };
 
 
     return {

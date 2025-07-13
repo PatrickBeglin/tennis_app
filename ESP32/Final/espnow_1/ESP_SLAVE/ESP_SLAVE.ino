@@ -13,7 +13,7 @@
 BLEServer* pServer = NULL;
 
 #define SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
-#define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
+#define SLAVE_CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a9"
 
 BLECharacteristic* pCharacteristic = NULL;
 bool deviceConnected = false;
@@ -28,8 +28,6 @@ class MyServerCallbacks: public BLEServerCallbacks {
   }
 };
 
-// MAC Address of the master ESP32
-uint8_t broadcastAddress[] = {0xE8, 0x6B, 0xEA, 0x2F, 0xE8, 0x08}; 
 Adafruit_BNO055 bno = Adafruit_BNO055(-1, 0x28, &Wire);
 
 static const int bufferSize = 400;
@@ -40,6 +38,9 @@ bool recordingActive = false;
 
 // Variable to store if sending data was successful
 String success;
+
+// master adress
+uint8_t broadcastAddress[] = {0xE8, 0x6B, 0xEA, 0x2F, 0xE8, 0x48};
 
 esp_now_peer_info_t peerInfo;
 
@@ -70,7 +71,6 @@ void OnDataRecv(const esp_now_recv_info *info, const uint8_t *incomingData, int 
     Serial.println("Received data request");
     uint8_t swingId = incomingData[1]; // Get swing ID from master
     uint8_t pointsToSend = incomingData[2]; // Get number of points to send from master
-
     sendData(swingId, pointsToSend);
   }
 }
@@ -79,7 +79,13 @@ void OnDataRecv(const esp_now_recv_info *info, const uint8_t *incomingData, int 
 void startRecording() {
   recordingActive = true;
   head = 0; // Reset buffer to start fresh
-  Serial.println("Recording started");
+  
+  // Clear the buffer to ensure no old data
+  for (int i = 0; i < bufferSize; i++) {
+    buffer[i] = imu::Vector<3>(0, 0, 0);
+  }
+  
+  Serial.println("Recording started - buffer cleared");
 }
 
 void sendData(uint8_t swingId, uint8_t pointsToSend) {
@@ -116,9 +122,16 @@ void sendData(uint8_t swingId, uint8_t pointsToSend) {
   }
 
   // Send via ble to phone
-  delay(1000); // delay to stop interference with other esp
+  delay(200); // Reduced delay to prevent interference with other esp
+  Serial.print("Sending BLE data: ");
+  Serial.print(dataIndex);
+  Serial.println(" bytes");
   pCharacteristic->setValue(binaryData, dataIndex);
-  pCharacteristic->indicate();
+  pCharacteristic->notify();
+  
+  // Stop recording after sending data
+  recordingActive = false;
+  Serial.println("Recording stopped");
 }
 
 
@@ -152,8 +165,8 @@ void setup() {
 
   // Create a BLE Characteristic (simplified)
   pCharacteristic = pService->createCharacteristic(
-                      CHARACTERISTIC_UUID,
-                      BLECharacteristic::PROPERTY_INDICATE
+                      SLAVE_CHARACTERISTIC_UUID,
+                      BLECharacteristic::PROPERTY_INDICATE | BLECharacteristic::PROPERTY_NOTIFY
                     );
 
   // Start the service
@@ -199,8 +212,11 @@ void loop() {
 
   imu::Vector<3> euler = bno.getVector(Adafruit_BNO055::VECTOR_EULER);
 
-  buffer[head] = euler;  // Store current reading
-  head = (head + 1) % bufferSize;  // Move head pointer
+  // Only record data if recording is active
+  if (recordingActive) {
+    buffer[head] = euler;  // Store current reading
+    head = (head + 1) % bufferSize;  // Move head pointer
+  }
 
   //50hz
   delay(20);

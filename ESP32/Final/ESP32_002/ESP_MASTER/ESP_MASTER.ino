@@ -23,7 +23,7 @@ bool oldDeviceConnected = false;
 Adafruit_BNO055 bno = Adafruit_BNO055(-1, 0x28, &Wire);
 
 #define SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
-#define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
+#define MASTER_CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
 
 class MyServerCallbacks: public BLEServerCallbacks {
     void onConnect(BLEServer* pServer) {
@@ -60,8 +60,8 @@ void setup() {
 
   // Create a BLE Characteristic (simplified)
   pCharacteristic = pService->createCharacteristic(
-                      CHARACTERISTIC_UUID,
-                      BLECharacteristic::PROPERTY_INDICATE
+                      MASTER_CHARACTERISTIC_UUID,
+                      BLECharacteristic::PROPERTY_INDICATE | BLECharacteristic::PROPERTY_NOTIFY
                     );
 
   // Start the service
@@ -78,7 +78,6 @@ void setup() {
     return;
   }
 
-  esp_now_register_recv_cb(OnDataRecv);
   memcpy(peerInfo.peer_addr, slaveAddress, 6);
   peerInfo.channel = 0;  
   peerInfo.encrypt = false;
@@ -140,7 +139,7 @@ void sendSwingData(int startIndex, int endIndex) {
   sendTriggerToSlave();
   
   // Give slave time to record data (swing duration + buffer)
-  delay(100); // Small delay to ensure slave has started recording
+  delay(100); // Small delay to ensure slave has started recording ==========
   
   int maxPoints = 82;
   int pointsToSend = min(swingLength, maxPoints); // cuts off long swings
@@ -172,9 +171,15 @@ void sendSwingData(int startIndex, int endIndex) {
     currentIndex = (currentIndex + 1) % bufferSize;
     count++;
   }
+  Serial.print("Sending BLE data: ");
+  Serial.print(dataIndex);
+  Serial.println(" bytes");
 
   pCharacteristic->setValue(binaryData, dataIndex);
   pCharacteristic->indicate();
+  
+  // Wait for BLE transmission to complete before requesting slave data
+  delay(1000);
   requestDataFromSlave(swingId, pointsToSend);
 }
 
@@ -199,19 +204,6 @@ void requestDataFromSlave(uint8_t swingId, uint8_t pointsToSend) {
     Serial.println("Request error");
   }
 }
-
-void OnDataRecv(const esp_now_recv_info *info, const uint8_t *incomingData, int len) {
-  if (incomingData[0] == 0x03) {
-    uint8_t swingId = incomingData[1];
-    uint8_t pointsReceived = incomingData[2];
-    Serial.print("Slave: ");
-    Serial.print(swingId);
-    Serial.print(",");
-    Serial.println(pointsReceived);
-  }
-}
-
-
 
 
 
