@@ -1,5 +1,5 @@
 export default {
-    card: "#1F1D20",
+    card: "#161416",
     cardLight: "#343335",
     accentText: "#939393",
     accentGrey: "#656565",

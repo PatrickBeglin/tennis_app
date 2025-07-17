@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import { useState } from "react";
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import color from '../colors';
@@ -15,6 +16,9 @@ import { Alert } from "react-native";
 import useBLE from "../utils/useBLE";
 
 import DeviceModal from "../components/BLE_overlay";
+import { ShowAllCard } from "../components/showAll";
+
+const router = useRouter();
 
 
 export default function Index() {
@@ -106,7 +110,7 @@ export default function Index() {
             <View style={styles.imagePlaceholder} />
             <Text style={styles.cardTitleL}>General Mode</Text>
             <Text style={styles.cardDescription}>Play continuously and track metrics across your serve, forehand and backhand</Text>
-            <TouchableOpacity style={styles.button}>
+            <TouchableOpacity onPress={() => router.push("/test")}  style={styles.button}>
               <Text style={styles.buttonText}>Start Session</Text>
             </TouchableOpacity>
           </View>
@@ -122,9 +126,11 @@ export default function Index() {
         </View>
         <View style={styles.doubleTitle}>
           <Text style={styles.sectionTitle}>Average Scores</Text>
+          <TouchableOpacity onPress={() => router.push({ pathname: "/summary", params: { mode: "overall" } })}>
           <Text style={styles.showMore}>Show more</Text>
+          </TouchableOpacity>
         </View>
-        <ScoreRings data={AVERAGE_SCORES} size={80} width={12} />
+        <ScoreRings onSegmentPress={(key) => router.push({ pathname: "/summary", params: { mode: key } })} data={AVERAGE_SCORES} size={95} width={12} selectedKey={undefined} />
         <View style={styles.doubleTitle}>
           <Text style={styles.sectionTitle}>Last Session</Text>
           <Text style={styles.showMore}>Show more</Text>
@@ -133,6 +139,7 @@ export default function Index() {
         <StatTotals data={serveData} />
         <StatBarsList data={serveData} />
         </View>
+        <ShowAllCard />
       </ScrollView>
   </View>
   );
@@ -240,12 +247,12 @@ const styles = StyleSheet.create({
   },
 
     cardR: {
-    backgroundColor: "#1c1c1e",
+    backgroundColor: color.card,
     borderRadius: 12,
     padding: 12,
     width: "49%",
     borderWidth: 0.5,
-    borderColor: color.blue, // placeholder for gradient effect
+    borderColor: color.blue, 
     display: 'flex',
     flexDirection: 'column',
     flex: 1,
