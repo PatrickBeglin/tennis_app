@@ -34,7 +34,6 @@ function useBLE(): BluetoothLowEnergyApi {
     // sensor data is a variable that stores the data from the tennis sensor
     // setsensordata is a function that sets the sensor data
     const [sensorData, setSensorData] = useState<{[deviceId: string]: any}>({}); // start with empty dictionary
-    console.log("sensorData", sensorData);
 
 
     // Listen for unexpected disconnections
@@ -284,8 +283,8 @@ function useBLE(): BluetoothLowEnergyApi {
         }
 
         const rawData = Buffer.from(characteristic.value, 'base64');
-        console.log("Raw data length:", rawData.length);
-        console.log("Raw data:", rawData);
+        //console.log("Raw data length:", rawData.length);
+        //console.log("Raw data:", rawData);
 
         try {
             const deviceId = rawData[0];
@@ -381,7 +380,7 @@ function useBLE(): BluetoothLowEnergyApi {
                 console.log("✅ Services discovered");
                 
                 // Monitor based on device name
-                if (device.name === "ESP32_MASTER") {
+                if (device.id.includes("E8:6B:EA:2F:E8:0A")) {
                     const subscription = discoveredDevice.monitorCharacteristicForService(
                         SERVICE_UUID,
                         MASTER_CHARACTERISTIC_UUID,
@@ -389,7 +388,7 @@ function useBLE(): BluetoothLowEnergyApi {
                         'indication'
                     );
                     console.log("✅ Started streaming MASTER data from:", device.name);
-                } else if (device.name === "ESP32_SLAVE") {
+                } else if (device.id.includes("E8:6B:EA:2F:E8:4A")) {
                     const subscription = discoveredDevice.monitorCharacteristicForService(
                         SERVICE_UUID,
                         SLAVE_CHARACTERISTIC_UUID,
@@ -426,9 +425,5 @@ function useBLE(): BluetoothLowEnergyApi {
 
 export default useBLE;
 
-export function useSensorData() {
-    const { sensorData } = useBLE();
-    return sensorData;
-} 
 
 

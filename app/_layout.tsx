@@ -30,6 +30,12 @@ export default function RootLayout() {
           headerTitle: 'Home',
         }}
       />
+      <Stack.Screen
+        name="serveMode"
+        options={{
+          headerShown: false,
+        }}
+      />
     </Stack>
   );
 }

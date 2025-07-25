@@ -110,7 +110,7 @@ export default function Index() {
             <View style={styles.imagePlaceholder} />
             <Text style={styles.cardTitleL}>General Mode</Text>
             <Text style={styles.cardDescription}>Play continuously and track metrics across your serve, forehand and backhand</Text>
-            <TouchableOpacity onPress={() => router.push("/test")}  style={styles.button}>
+            <TouchableOpacity  style={styles.button}>
               <Text style={styles.buttonText}>Start Session</Text>
             </TouchableOpacity>
           </View>
@@ -119,7 +119,7 @@ export default function Index() {
             <View style={styles.imagePlaceholder} />
             <Text style={styles.cardTitleR}>Serve Mode</Text>
             <Text style={styles.cardDescription}>Gather instant feedback on your serve</Text>
-            <TouchableOpacity style={styles.button}>
+            <TouchableOpacity  onPress={() => router.push("/serveMode")} style={styles.button}>
               <Text style={styles.buttonText}>Start Session</Text>
             </TouchableOpacity>
           </View>
