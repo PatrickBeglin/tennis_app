@@ -4,37 +4,69 @@ export const options = {
 
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import color from "./colors";
 import { PostServe } from "./components/postServe";
 import SaveSessionModal from "./components/SaveSessionModal";
 import StatGrid from "./components/stat_grid";
 import { StatTotals } from "./components/stat_totals";
-import { GRID_AVERAGE_SCORES } from "./data/grid_average_scores";
-import { serveData } from "./data/serve_scores";
+import { getCurrentGridScores, processLiveData } from './data/liveDataProcessing';
 import spacing from "./spacing";
-
-const postServeStats = [
-    {
-      type: 'wrist',
-      value: "48°",
-      delta: "+2°",
-      avg: "47°",
-      best: "59°",
-      score: "78",
-      label: { min : "-20°", max : "360°"},
-      tip: 'Try to finish your swing with more wrist pronation at impact.',
-      status: 'Good',
-      statusColor: '#B6FF7A',
-      sliderValue: 0.50,
-    },
-    // Add more objects for other card types
-  ];
   
 
 export default function AboutScreen() {
   const [isSaveModalVisible, setIsSaveModalVisible] = useState(false);
+  const [swingData, setSwingData] = useState<any[]>([]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const newData = processLiveData();
+      if (newData.length > 0) { // Only update if there's new data
+        setSwingData(newData);
+      }
+    }, 1000); // Check every second
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // added fallback objects with default values
+  const wristData = swingData[0] || {
+    title: 'Wrist Pronation',
+    value: '0°',
+    delta: '0°',
+    avg: '0°',
+    best: '0°',
+    score: '0',
+    label: ['0°', '180°'],
+    proRange: '80° - 120°',
+    tip: 'No data available',
+    status: 'No Data',
+    statusColor: '#666666',
+    sliderValue: 0
+  };
+  const speedData = swingData[1] || {
+    title: 'Speed',
+    value: '0',
+    delta: '0',
+    avg: '0',
+    best: '0',
+    score: '0',
+    label: ['20mph', '150mph'],
+    proRange: '85mph - 95mph',
+    tip: 'No data available',
+    status: 'No Data',
+    statusColor: '#666666',
+    sliderValue: 0
+  };
+  
+  // Extract session summary data
+  const sessionSummaryData = swingData[2] || {
+    title: 'Session Summary',
+    timePlayed: "0mins",
+    totalServes: 0,
+    totalScore: 0
+  };
 
   const handleFinishPress = () => {
     setIsSaveModalVisible(true);
@@ -58,6 +90,7 @@ export default function AboutScreen() {
     setIsSaveModalVisible(false);
   };
 
+
   return (
     <View style={{ flex: 1, backgroundColor: "black" }}>
         <View style={styles.header}>
@@ -80,15 +113,13 @@ export default function AboutScreen() {
 
               <View style = {styles.container}>
                   <Text style={styles.sectionTitle}>Previous Serve</Text>
-                  <PostServe type="wrist" data={postServeStats[0]} expanded={false} onToggle={() => {}} />
-                  <PostServe type="wrist" data={postServeStats[0]} expanded={false} onToggle={() => {}} />
-                  <PostServe type="wrist" data={postServeStats[0]} expanded={false} onToggle={() => {}} />
-                  <PostServe type="wrist" data={postServeStats[0]} expanded={false} onToggle={() => {}} />
+                  <PostServe type="wrist" data={wristData} expanded={false} onToggle={() => {}} />
+                  <PostServe type="speed" data={speedData} expanded={false} onToggle={() => {}} />
                   <Text style={styles.sectionTitle}>Session Summary</Text>
                   <View style={styles.statTotalCard}>
-                    <StatTotals data={serveData} />
+                    <StatTotals data={sessionSummaryData} />
                   </View>
-                  <StatGrid data={GRID_AVERAGE_SCORES} />
+                  <StatGrid data={getCurrentGridScores()} />
                   <View style={styles.showAllCard}>
                     <Text style={styles.showAllText}>Show All Serves</Text>
                     <Ionicons name="chevron-forward" size={34} color={color.accentText} />

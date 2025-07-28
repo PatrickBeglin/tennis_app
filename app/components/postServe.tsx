@@ -17,27 +17,16 @@ type PostServeProps = {
 export function PostServe({ type, data, expanded, onToggle }: PostServeProps) {
 
     const [collapsedMode, setCollapsedMode] = useState(true);
-    
-    
-    let title = ""
-    let pro = ""
-    let label = ["", ""]
-    if (type === "wrist") {
-        title = "Wrist Pronation"
-        pro = "55° - 65°"
-        label = ["0°", "360°"]
-    } else if (type === "speed") {
-        title = "Swing Speed"
-        pro = "85mph - 95mph"
-        label = ["20mph", "150mph"]
-    } else if (type === "torso") {
-        title = "Torso Rotation"
-        pro = "10° - 15°"
-        label = ["-20°", "360°"]
-    } else if (type === "shot") {
-        title = "Shot Timing"
-        label = ["-2s°", "+2s°"]
-    }
+
+    const getDeltaColor = (delta: string) => {
+        if (delta.startsWith('+')) {
+          return "#00FF36";
+        } else if (delta.startsWith('-')) {
+          return "#FF0000";
+        }
+        return color.accentText;
+      }
+
 
     return (
         <View>
@@ -46,7 +35,7 @@ export function PostServe({ type, data, expanded, onToggle }: PostServeProps) {
             <View style={styles.card}>
                 <View style={styles.doubleTitle}> 
                     <View style={styles.titleContainer}>
-                        <Text style={styles.title}>{title}</Text>
+                        <Text style={styles.title}>{data.title}</Text>
                         <View style={styles.circleContainer}>
                             <View style={[styles.circle, { backgroundColor: data.statusColor }]} />
                             <Text style={styles.circleText}>{data.status}</Text>
@@ -62,7 +51,7 @@ export function PostServe({ type, data, expanded, onToggle }: PostServeProps) {
                         
                         <LinearGradient
                         colors={[color.accentGrey,  color.purple, color.purple, color.accentGrey]}
-                        locations={[0.35, 0.40, 0.60, 0.65]}
+                        locations={data.sliderGradient}
                         start={[0, 0]}
                         end={[1, 0]}
                         style={styles.sliderTrack}
@@ -79,8 +68,8 @@ export function PostServe({ type, data, expanded, onToggle }: PostServeProps) {
                     </View>
 
                     <View style={styles.sliderLabelRow}>
-                        <Text style={styles.sliderLabel}>{label[0]}</Text>
-                        <Text style={styles.sliderLabel}>{label[1]}</Text>
+                        <Text style={styles.sliderLabel}>{data.label[0]}</Text>
+                        <Text style={styles.sliderLabel}>{data.label[1]}</Text>
                     </View>
 
                     <TouchableOpacity onPress={() => setCollapsedMode(!collapsedMode)}>
@@ -102,7 +91,7 @@ export function PostServe({ type, data, expanded, onToggle }: PostServeProps) {
 <View style={styles.card}>
                 <View style={styles.doubleTitle}> 
                     <View style={styles.titleContainer}>
-                        <Text style={styles.title}>{title}</Text>
+                        <Text style={styles.title}>{data.title}</Text>
                         <View style={styles.circleContainer}>
                             <View style={[styles.circle, { backgroundColor: data.statusColor }]} />
                             <Text style={styles.circleText}>{data.status}</Text>
@@ -118,7 +107,7 @@ export function PostServe({ type, data, expanded, onToggle }: PostServeProps) {
                         
                         <LinearGradient
                         colors={[color.accentGrey,  color.purple, color.purple, color.accentGrey]}
-                        locations={[0.35, 0.40, 0.60, 0.65]}
+                        locations={data.sliderGradient}
                         start={[0, 0]}
                         end={[1, 0]}
                         style={styles.sliderTrack}
@@ -135,17 +124,17 @@ export function PostServe({ type, data, expanded, onToggle }: PostServeProps) {
                     </View>
 
                     <View style={styles.sliderLabelRow}>
-                        <Text style={styles.sliderLabel}>{label[0]}</Text>
-                        <Text style={styles.sliderLabel}>{label[1]}</Text>
+                        <Text style={styles.sliderLabel}>{data.label[0]}</Text>
+                        <Text style={styles.sliderLabel}>{data.label[1]}</Text>
                     </View>
 
                     <View style={styles.proRangeContainer}>
                         <View style={styles.proRangeContainer2}>
                             <Text style={styles.proRangeText}>Pro Range: </Text>
-                            <Text style={styles.proRange}>{pro}</Text>
+                            <Text style={styles.proRange}>{data.proRange}</Text>
                         </View>
                         <View style={styles.deltaContainer}>
-                            <Text style={[styles.deltaText, {color: data.statusColor}]}>{data.delta}</Text>
+                            <Text style={[styles.deltaText, {color: getDeltaColor(data.delta)}]}>{data.delta}</Text>
                             <Text style={styles.deltaText2}> From last Serve</Text>
                         </View>
                     </View>

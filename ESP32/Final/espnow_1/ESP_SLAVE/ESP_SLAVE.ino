@@ -95,6 +95,7 @@ void sendData(uint8_t swingId, uint8_t pointsToSend) {
 
   binaryData[dataIndex++] = 0x03; // 03 for slave
   binaryData[dataIndex++] = swingId; // Swing ID from master
+  binaryData[dataIndex++] = 0; // 0x00 for speed
   
   // Limit points to send based on available data and ESP-NOW limit
   int actualPointsToSend = min(min((int)pointsToSend, head), 82);
@@ -110,10 +111,6 @@ void sendData(uint8_t swingId, uint8_t pointsToSend) {
 
   // Send data starting from index 0 (since we reset the buffer)
   for (int i = 0; i < actualPointsToSend; i++) {
-    // Timestamp (2 bytes - milliseconds since recording start)
-    unsigned long timestamp = i * 20; // 0, 20, 40, 60... ms at 50Hz
-    binaryData[dataIndex++] = (timestamp >> 8) & 0xFF;  // High byte
-    binaryData[dataIndex++] = timestamp & 0xFF; // Low byte
     
     // X, Y, Z values (3 bytes, signed)
     binaryData[dataIndex++] = (int8_t)buffer[i].x();
@@ -141,7 +138,7 @@ void setup() {
   Serial.begin(115200);
   Serial.println("go");
   delay(3000);  // Let USB settle
-  Serial.println("✅ Serial is working");
+  Serial.println("Serial is working");
   while (!Serial) delay(10);
   
   if(!bno.begin())

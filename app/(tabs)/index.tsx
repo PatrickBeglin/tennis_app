@@ -15,6 +15,9 @@ import { serveData } from "../data/serve_scores";
 import { Alert } from "react-native";
 import useBLE from "../utils/useBLE";
 
+// Import to trigger liveDataProcessing execution
+import "../data/liveDataProcessing";
+
 import DeviceModal from "../components/BLE_overlay";
 import { ShowAllCard } from "../components/showAll";
 

@@ -99,9 +99,19 @@ bool swingActive = false;
 int swingStartIndex = 0;
 int swingEndIndex = 0;
 unsigned long lastSwingTime = 0;  // Add cooldown tracking
-const unsigned long SWING_COOLDOWN_MS = 2000;  // 2 second cooldown
-const int MIN_SWING_DURATION = 5;  // Minimum 5 samples for a swing (reduced from 20)
+const unsigned long SWING_COOLDOWN_MS = 1000;  // 2 second cooldown
+const int MIN_SWING_DURATION = 20;  // Minimum 5 samples for a swing (reduced from 20)
 int swingSampleCount = 0;  // Track samples during swing
+
+// change these to get accurate swing detection
+const float DETECT_ROTATION_THRESHOLD = 0;
+const float DETECT_ACCEL_THRESHOLD = 8.0;
+const float DETECT_ROTATION_THRESHOLD_LOW = 0;
+const float DETECT_ACCEL_THRESHOLD_LOW = 4.0;
+
+// Global speed variable
+float maxSpeed_mph = 0;
+float currentAccel = 0;
 
 bool swingDetected(){
   // Check cooldown first
@@ -118,11 +128,21 @@ bool swingDetected(){
   auto earlier = buffer[tenBack]; 
 
   // Increase threshold to 80 degrees for more realistic swing detection
-  if (fabs(curr.x() - earlier.x()) > 100.0 ||
-      fabs(curr.y() - earlier.y()) > 100.0 ||
-      fabs(curr.z() - earlier.z()) > 100.0) {
+  if ((fabs(curr.x() - earlier.x()) > DETECT_ROTATION_THRESHOLD ||
+      fabs(curr.y() - earlier.y()) > DETECT_ROTATION_THRESHOLD ||
+      fabs(curr.z() - earlier.z()) > DETECT_ROTATION_THRESHOLD) &&
+      (currentAccel > DETECT_ACCEL_THRESHOLD))
+       {
     return true;
   }
+
+  if ((fabs(curr.x() - earlier.x()) > DETECT_ROTATION_THRESHOLD_LOW ||
+      fabs(curr.y() - earlier.y()) > DETECT_ROTATION_THRESHOLD_LOW ||
+      fabs(curr.z() - earlier.z()) > DETECT_ROTATION_THRESHOLD_LOW) &&
+      (currentAccel > DETECT_ACCEL_THRESHOLD_LOW)) {
+    return true;
+  }
+
   return false;
 }
 
@@ -141,7 +161,7 @@ void sendSwingData(int startIndex, int endIndex) {
   // Give slave time to record data (swing duration + buffer)
   delay(100); // Small delay to ensure slave has started recording ==========
   
-  int maxPoints = 82;
+  int maxPoints = 169; 
   int pointsToSend = min(swingLength, maxPoints); // cuts off long swings
 
   //create binary packet 500bytes
@@ -150,6 +170,7 @@ void sendSwingData(int startIndex, int endIndex) {
 
   binaryData[dataIndex++] = 0x02; // the id for master
   binaryData[dataIndex++] = swingId; // id for the swing
+  binaryData[dataIndex++] = (uint8_t)(maxSpeed_mph * 2); // max speed of swing *2 for better accu
   binaryData[dataIndex++] = pointsToSend; // number of points to send
 
   // convert to binary
@@ -159,9 +180,9 @@ void sendSwingData(int startIndex, int endIndex) {
   // loops each data point in the swing and stops at endIndex
   while (count < pointsToSend && currentIndex != endIndex) {
     // Timestamp (2 bytes - milliseconds since swing start)
-    unsigned long timestamp = count * 20; // 0, 20, 40, 60... ms at 50Hz
-    binaryData[dataIndex++] = (timestamp >> 8) & 0xFF;  // High byte
-    binaryData[dataIndex++] = timestamp & 0xFF;// Low byte
+    //unsigned long timestamp = count * 20; // 0, 20, 40, 60... ms at 50Hz
+    //binaryData[dataIndex++] = (timestamp >> 8) & 0xFF;  // High byte
+    //binaryData[dataIndex++] = timestamp & 0xFF;// Low byte
     
     // X, Y, Z values (3 bytes, signed)
     binaryData[dataIndex++] = (int8_t)buffer[currentIndex].x();
@@ -205,11 +226,53 @@ void requestDataFromSlave(uint8_t swingId, uint8_t pointsToSend) {
   }
 }
 
+float vx = 0, vy = 0, vz = 0;
+float maxSpeed = 0;
+const float dt = 0.02; // 50hz to calculate speed from acceleration
+const float DRIFT_THRESHOLD = 1.5; // Threshold to detect when device is at rest 
 
+
+void calculateSpeed(float ax, float ay, float az) {
+  // Check if device is at rest (low acceleration)
+  float accelMagnitude = sqrt(ax*ax + ay*ay + az*az);
+  currentAccel = accelMagnitude;
+  
+  if (accelMagnitude < DRIFT_THRESHOLD) {
+    // Reset velocity when device is at rest to prevent drift
+    vx = 0;
+    vy = 0;
+    vz = 0;
+  } else {
+    // Only integrate acceleration when there's significant movement
+    vx += ax * dt;
+    vy += ay * dt;
+    vz += az * dt;
+  }
+
+  float speed = sqrt(vx*vx + vy*vy + vz*vz);
+  if (speed > maxSpeed) {
+      maxSpeed = speed;
+  }
+}
+
+const int SWING_END_SETTLE_SAMPLES = 5;
+int noDetected = 0;
 
 void loop() {
   // get sensor data
   imu::Vector<3> euler = bno.getVector(Adafruit_BNO055::VECTOR_EULER);
+  imu::Vector<3> linearAccel = bno.getVector(Adafruit_BNO055::VECTOR_LINEARACCEL);
+
+  calculateSpeed(linearAccel.x(), linearAccel.y(), linearAccel.z());
+  maxSpeed_mph = maxSpeed * 2.23694;
+  //Serial.print("Max Speed of swing in mph: "); Serial.println(maxSpeed_mph);
+
+  // test prints
+  //Serial.print("X: "); Serial.print(euler.x());
+  //Serial.print(" Y: "); Serial.print(euler.y());
+  //Serial.print(" Z: "); Serial.println(euler.z());
+
+
 
   buffer[head] = euler;  // Store current reading
   head = (head + 1) % bufferSize;  // Move head pointer
@@ -219,12 +282,20 @@ void loop() {
     swingActive = true;
     swingStartIndex = (head - 1 + bufferSize) % bufferSize;
     swingSampleCount = 0;
+
   }
+
 
   if (swingActive) {
     swingSampleCount++;  // Count samples during swing
-    
+
     if (!swingDetected()) {
+      noDetected++;
+    } else {
+      noDetected = 0;
+    }
+
+    if (noDetected > SWING_END_SETTLE_SAMPLES && swingSampleCount > MIN_SWING_DURATION) {
       swingActive = false;
       swingEndIndex = (head - 1 + bufferSize) % bufferSize; // End at the position where swing ended
       lastSwingTime = millis();  // Set cooldown timer
@@ -233,16 +304,23 @@ void loop() {
       Serial.println(swingSampleCount);
       
       sendSwingData(swingStartIndex, swingEndIndex);
-    }
-  }
 
+      // Reset speed tracking for new swing
+      maxSpeed = 0;
+      vx = 0;
+      vy = 0;
+      vz = 0;
+    }
+    
+  }
+  
+  delay(BNO055_SAMPLERATE_DELAY_MS);
 
   // notify changed value
   if (deviceConnected) {
       //Serial.println("sending data");
       // pCharacteristic->setValue((uint8_t*)dataJson.c_str(), dataJson.length());
       //pCharacteristic->notify(); 
-      delay(BNO055_SAMPLERATE_DELAY_MS);
   }
   // disconnecting
   if (!deviceConnected && oldDeviceConnected) {

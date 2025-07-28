@@ -9,6 +9,15 @@ const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
 const MASTER_CHARACTERISTIC_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8"  // Master
 const SLAVE_CHARACTERISTIC_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a9"   // Slave
 
+// Global variable to store sensor data - accessible from anywhere
+export let globalSensorData: {[deviceId: string]: any} = {};
+console.log("USE BLE TEST Global sensor data:", globalSensorData);
+
+// Function to update global sensor data
+export const updateGlobalSensorData = (newData: {[deviceId: string]: any}) => {
+    globalSensorData = { ...globalSensorData, ...newData };
+};
+
 interface BluetoothLowEnergyApi {
     requestPermissions(): Promise<boolean>;
     scanForPeripherals(): void;
@@ -22,6 +31,8 @@ interface BluetoothLowEnergyApi {
     maxConnections: number;
     sensorData: {[deviceId: string]: any};
 }
+
+
 
 function useBLE(): BluetoothLowEnergyApi {
     const bleManager = useMemo(()=> new BleManager(), []);
@@ -298,6 +309,11 @@ function useBLE(): BluetoothLowEnergyApi {
                     [tennisData.device_id]: tennisData
                 }));
 
+                // Update global sensor data
+                updateGlobalSensorData({
+                    [tennisData.device_id]: tennisData
+                });
+
             } else if (deviceId === 0x03) {
                 const tennisData = processBinaryData(rawData);
                 console.log("SLAVE Tennis Data:", tennisData);
@@ -306,6 +322,11 @@ function useBLE(): BluetoothLowEnergyApi {
                     ...prev,
                     [tennisData.device_id]: tennisData
                 }));
+
+                // Update global sensor data
+                updateGlobalSensorData({
+                    [tennisData.device_id]: tennisData
+                });
             } else {
                 console.log("ERROR Unknown device ID:", deviceId);
             }
@@ -321,42 +342,37 @@ function useBLE(): BluetoothLowEnergyApi {
 
         const deviceId = buffer[offset++]; // reads byte 0 then 1 etc
         const swingId = buffer[offset++];
+        const maxSpeed = buffer[offset++] / 2; // divide by 2 to get acc mph
         const pointsToSend = buffer[offset++];
-
-
 
         const swingData = [];
 
         for (let i = 0; i < pointsToSend; i++) {
-
-            const timestamp = (buffer[offset] << 8) | buffer[offset + 1]; // reconstructs timestamp
-            offset += 2;
 
             const x = buffer.readInt8(offset++);
             const y = buffer.readInt8(offset++);
             const z = buffer.readInt8(offset++);
 
             swingData.push({
-                i: i,
-                timestamp: timestamp,
                 x: x,
                 y: y,
                 z: z,
             })
-
-            
         }
         if (deviceId === 0x03) {
             return {
                 device_id: "ESP32_SLAVE",
                 swing_id: swingId,
+                max_speed: maxSpeed,
                 swing: swingData,
+
             }
         }
         else if (deviceId === 0x02) {
             return {
                 device_id: "ESP32_MASTER",
                 swing_id: swingId,
+                max_speed: maxSpeed,
                 swing: swingData,
             }
         }
@@ -364,6 +380,7 @@ function useBLE(): BluetoothLowEnergyApi {
             return {
                 device_id: "UNKNOWN",
                 swing_id: swingId,
+                max_speed: maxSpeed,
                 swing: swingData,
             }
         }
