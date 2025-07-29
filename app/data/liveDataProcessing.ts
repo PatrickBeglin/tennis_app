@@ -6,7 +6,7 @@ import { globalSensorData } from "../utils/useBLE";
 setInterval(() => {
     // Only log if there's actual data
     if (Object.keys(globalSensorData).length > 0) {
-        console.log("LIVE DATA PROCESSING Current global sensor data:", globalSensorData);
+        //console.log("LIVE DATA PROCESSING Current global sensor data:", globalSensorData);
     }
 }, 2000);
 
@@ -68,19 +68,71 @@ const normalizeDataLengths = (MasterData: any, SlaveData: any) => {
     return masterLength;
 };
 
-// Helper function to calculate max Y rotation difference
-const calculateMaxYRotationDifference = (MasterData: any, SlaveData: any, dataLength: number): number => {
-    let maxYRotationDifference = 0;
+// Helper function to calculate max wrist pronation using quaternions
+const calculateMaxWristPronation = (MasterData: any, SlaveData: any, dataLength: number): number => {
+    let maxPronation = 0;
 
-    for (let i = 0; i < dataLength; i++) {
-        let difference = Math.abs(MasterData.swing[i].y - SlaveData.swing[i].y);
-        if (difference > maxYRotationDifference) {
-            maxYRotationDifference = difference;
+    // Debug: Log first sample to check sensor alignment
+    if (dataLength > 0) {
+        const w = MasterData.swing[0]; // wrist
+        const u = SlaveData.swing[0];  // upper arm
+        console.log("DEBUG - First sample quaternions:");
+        console.log("Wrist (w,x,y,z):", w.w.toFixed(4), w.x.toFixed(4), w.y.toFixed(4), w.z.toFixed(4));
+        console.log("Upper arm (w,x,y,z):", u.w.toFixed(4), u.x.toFixed(4), u.y.toFixed(4), u.z.toFixed(4));
+        
+        // Check if sensors might be 180° rotated (inverse quaternions)
+        const dot = w.w * u.w + w.x * u.x + w.y * u.y + w.z * u.z;
+        console.log("Dot product (should be ~1.0 if aligned, ~-1.0 if 180° off):", dot.toFixed(4));
+        
+        if (dot < -0.5) {
+            console.log("WARNING: Sensors appear to be 180° rotated! Consider inverting one sensor.");
         }
     }
 
-    return maxYRotationDifference;
+    // Helper function to multiply quaternions
+    const quaternionMultiply = (q1: any, q2: any) => {
+        return {
+            w: q1.w * q2.w - q1.x * q2.x - q1.y * q2.y - q1.z * q2.z,
+            x: q1.w * q2.x + q1.x * q2.w + q1.y * q2.z - q1.z * q2.y,
+            y: q1.w * q2.y - q1.x * q2.z + q1.y * q2.w + q1.z * q2.x,
+            z: q1.w * q2.z + q1.x * q2.y - q1.y * q2.x + q1.z * q2.w
+        };
+    };
+
+    // Helper function to get quaternion conjugate (inverse for unit quaternions)
+    const quaternionConjugate = (q: any) => {
+        return { w: q.w, x: -q.x, y: -q.y, z: -q.z };
+    };
+
+    for (let i = 0; i < dataLength; i++) {
+        const wristQuat = MasterData.swing[i]; // wrist (already normalized)
+        const upperArmQuat = SlaveData.swing[i];  // upper arm (already normalized)
+
+        // Calculate relative quaternion: relativeQuat = upperArmConjugate * wristQuat
+        // This gives us the rotation from upper arm to wrist
+        const upperArmConjugate = quaternionConjugate(upperArmQuat);
+        const relativeQuat = quaternionMultiply(upperArmConjugate, wristQuat);
+
+        // Use Y-axis rotation as the primary pronation axis (most reliable for wrist pronation)
+        // Y-axis typically represents wrist pronation/supination
+        const pronationAngle = Math.atan2(
+            2 * (relativeQuat.w * relativeQuat.y + relativeQuat.x * relativeQuat.z),
+            1 - 2 * (relativeQuat.y * relativeQuat.y + relativeQuat.z * relativeQuat.z)
+        ) * (180 / Math.PI);
+
+        // Track maximum absolute pronation
+        const absPronation = Math.abs(pronationAngle);
+        if (absPronation > maxPronation) {
+            maxPronation = absPronation;
+        }
+    }
+
+    console.log("Wrist pronation angle:", maxPronation);
+    return maxPronation;
 };
+
+
+
 
 // Helper function to get rotation tip
 const getRotationTip = (maxYRotationDifference: number): string => {
@@ -110,9 +162,9 @@ const calculateDelta = (maxYRotationDifference: number): string => {
     if (yRotationScores.length === 0 || maxYRotationDifference !== lastSwingScore) {
         let delta = maxYRotationDifference - lastSwingScore;
         if (delta > 0) {
-            lastMeaningfulDelta = "+" + String(delta) + "°";
+            lastMeaningfulDelta = "+" + String(Math.round(delta)) + "°";
         } else {
-            lastMeaningfulDelta = String(delta) + "°";
+            lastMeaningfulDelta = String(Math.round(delta)) + "°";
         }
         return lastMeaningfulDelta;
     }
@@ -273,33 +325,33 @@ export const processLiveData = () => {
     // Normalize data lengths
     const dataLength = normalizeDataLengths(MasterData, SlaveData);
 
-    // Calculate max Y rotation difference
-    let maxYRotationDifference = calculateMaxYRotationDifference(MasterData, SlaveData, dataLength);
+    // Calculate max wrist pronation using quaternions
+    let maxPronation = calculateMaxWristPronation(MasterData, SlaveData, dataLength);
     
-    if (maxYRotationDifference > bestYRotationDifference) {
-        bestYRotationDifference = maxYRotationDifference;
+    if (maxPronation > bestYRotationDifference) {
+        bestYRotationDifference = maxPronation;
     }
-    console.log("Y rotation difference:", maxYRotationDifference);
+    console.log("Wrist pronation angle:", maxPronation);
 
-    let wristValue = String(maxYRotationDifference) + "°";
+    let wristValue = String((Math.round(maxPronation)) + "°");
 
     // Get rotation tip
-    let rotationTip = getRotationTip(maxYRotationDifference);
+    let rotationTip = getRotationTip(maxPronation);
 
-    // Calculate rotation score
-    let rotationScore = calculateRotationScore(maxYRotationDifference);
+    // Calculate rotation 
+    let rotationScore = calculateRotationScore(maxPronation);
     
     // Calculate delta
-    let delta = calculateDelta(maxYRotationDifference);
+    let delta = calculateDelta(maxPronation);
 
     // Update averages
-    updateAverages(maxYRotationDifference);
+    updateAverages(maxPronation);
 
     // Get wrist status
-    const { status: wristStatus, color: wristStatusColor } = getWristStatus(maxYRotationDifference);
+    const { status: wristStatus, color: wristStatusColor } = getWristStatus(maxPronation);
 
     // Calculate slider value
-    let wristSliderValue = calculateSliderValue(maxYRotationDifference);
+    let wristSliderValue = calculateSliderValue(maxPronation);
 
 
 
@@ -323,11 +375,11 @@ export const processLiveData = () => {
     let formattedData = [
         {
             title: 'Wrist Pronation',
-            value: wristValue,
+            value: String(Math.round(maxPronation)) + "°",
             delta: delta,
-            avg: String(averageYRotationScore) + "°",
-            best: String(bestYRotationDifference) + "°",
-            score: String(rotationScore),
+            avg: String(Math.round(averageYRotationScore)) + "°",
+            best: String(Math.round(bestYRotationDifference)) + "°",
+            score: String(Math.round(rotationScore)),
             label: ["0°", "180°"],
             proRange: "80° - 120°",
             tip: rotationTip,
@@ -338,17 +390,32 @@ export const processLiveData = () => {
         },
         {
             title: 'Swing Speed',
-            value: swingSpeedValue,
+            value: String(Math.round(swingSpeed)) + " mph",
             delta: speedDelta,
-            avg: String(averageSwingSpeed) + " mph",
-            best: String(bestSwingSpeed) + " mph",
-            score: String(calculateSwingScore(swingSpeed)),
+            avg: String(Math.round(averageSwingSpeed)) + " mph",
+            best: String(Math.round(bestSwingSpeed)) + " mph",
+            score: String(Math.round(calculateSwingScore(swingSpeed))),
             label: ["0mph", "120mph"],
             proRange: "80 mph +",   
             tip: getSwingSpeedTip(swingSpeed),
             status: calculateSwingStatus(swingSpeed),
             statusColor: calculateSwingStatusColor(swingSpeed),
             sliderValue: calculateSwingSliderValue(swingSpeed),
+            sliderGradient: [0.8,0.85,1,1]
+        },
+        {
+            title: 'Contact Timing',
+            value: "0.00s",
+            delta: "0.00s",
+            avg: "0.00s",
+            best: "0.00s",
+            score: "0",
+            label: ["0.00s", "0.00s"],
+            proRange: "0.00s - 0.00s",
+            tip: "No data available",
+            status: "No Data",
+            statusColor: "#666666",
+            sliderValue: 0,
             sliderGradient: [0.8,0.85,1,1]
         },
         {
@@ -361,7 +428,7 @@ export const processLiveData = () => {
         }
     ];
 
-    console.log("formattedData:", formattedData);
+    //console.log("formattedData:", formattedData);
     return formattedData;
 };
 

@@ -61,7 +61,7 @@ export default function AboutScreen() {
   };
   
   // Extract session summary data
-  const sessionSummaryData = swingData[2] || {
+  const sessionSummaryData = swingData[3] || {
     title: 'Session Summary',
     timePlayed: "0mins",
     totalServes: 0,

@@ -31,7 +31,8 @@ class MyServerCallbacks: public BLEServerCallbacks {
 Adafruit_BNO055 bno = Adafruit_BNO055(-1, 0x28, &Wire);
 
 static const int bufferSize = 400;
-imu::Vector<3> buffer[bufferSize];
+imu::Quaternion buffer[bufferSize];
+float accelBuffer[bufferSize]; // Track acceleration magnitude for impact detection
 int head = 0;
 bool recordingActive = false;
 
@@ -82,7 +83,8 @@ void startRecording() {
   
   // Clear the buffer to ensure no old data
   for (int i = 0; i < bufferSize; i++) {
-    buffer[i] = imu::Vector<3>(0, 0, 0);
+    buffer[i] = imu::Quaternion(1, 0, 0, 0); // Identity quaternion
+    accelBuffer[i] = 0.0f; // Clear acceleration buffer
   }
   
   Serial.println("Recording started - buffer cleared");
@@ -98,8 +100,21 @@ void sendData(uint8_t swingId, uint8_t pointsToSend) {
   binaryData[dataIndex++] = 0; // 0x00 for speed
   
   // Limit points to send based on available data and ESP-NOW limit
-  int actualPointsToSend = min(min((int)pointsToSend, head), 82);
+  int actualPointsToSend = min(min((int)pointsToSend, head), 82); // Back to original 3 bytes per sample
   binaryData[dataIndex++] = actualPointsToSend; // Number of points
+  
+  // Find peak impact point (maximum acceleration) within the recorded data
+  float maxAccel = 0;
+  int impactIndex = 0;
+  
+  for (int i = 0; i < actualPointsToSend; i++) {
+    if (accelBuffer[i] > maxAccel) {
+      maxAccel = accelBuffer[i];
+      impactIndex = i; // Store relative index within recorded data
+    }
+  }
+  
+  binaryData[dataIndex++] = (uint8_t)(impactIndex % 256); // impact index (peak acceleration point)
   
   Serial.print("Slave has ");
   Serial.print(head);
@@ -112,17 +127,38 @@ void sendData(uint8_t swingId, uint8_t pointsToSend) {
   // Send data starting from index 0 (since we reset the buffer)
   for (int i = 0; i < actualPointsToSend; i++) {
     
-    // X, Y, Z values (3 bytes, signed)
-    binaryData[dataIndex++] = (int8_t)buffer[i].x();
-    binaryData[dataIndex++] = (int8_t)buffer[i].y();
-    binaryData[dataIndex++] = (int8_t)buffer[i].z();
+    // Send only X and Y components (3 bytes) - W and Z can be reconstructed on RN side
+    // X = roll (wrist pronation/supination), Y = pitch (wrist flexion/extension)
+    // Scale to fit in 12-bit range (-2048 to 2047)
+    // First normalize the quaternion to ensure values are in valid range
+    float w = buffer[i].w();
+    float x = buffer[i].x();
+    float y = buffer[i].y();
+    float z = buffer[i].z();
+    
+    // Clamp raw values to [-1.0, 1.0] range (no normalization)
+    x = constrain(x, -1.0f, 1.0f);
+    y = constrain(y, -1.0f, 1.0f);
+    
+    // Removed debug prints to prevent serial buffer overflow
+    
+    uint16_t x_scaled = (uint16_t)((x + 1.0f) * 1023.5f);
+    uint16_t y_scaled = (uint16_t)((y + 1.0f) * 1023.5f);
+    
+    // Pack 12-bit values efficiently: 3 bytes for X and Y
+    // First 2 bytes: X (12 bits) + Y (12 bits)
+    binaryData[dataIndex++] = (uint8_t)(x_scaled & 0xFF);           // X low byte
+    binaryData[dataIndex++] = (uint8_t)((x_scaled >> 8) & 0x0F) |   // X high 4 bits
+                              (uint8_t)((y_scaled << 4) & 0xF0);     // Y low 4 bits
+    binaryData[dataIndex++] = (uint8_t)((y_scaled >> 4) & 0xFF);    // Y high 8 bits
   }
 
   // Send via ble to phone
   delay(200); // Reduced delay to prevent interference with other esp
   Serial.print("Sending BLE data: ");
   Serial.print(dataIndex);
-  Serial.println(" bytes");
+  Serial.print(" bytes | Impact at sample: ");
+  Serial.println(impactIndex);
   pCharacteristic->setValue(binaryData, dataIndex);
   pCharacteristic->notify();
   
@@ -148,6 +184,41 @@ void setup() {
     Serial.println("BNO055 detected");
   }
   delay(1000);
+  bno.setExtCrystalUse(true);
+  
+  // Check calibration status
+  uint8_t sys, gyro, accel, mag;
+  bno.getCalibration(&sys, &gyro, &accel, &mag);
+  Serial.print("SLAVE Calibration - Sys:"); Serial.print(sys);
+  Serial.print(" Gyro:"); Serial.print(gyro);
+  Serial.print(" Accel:"); Serial.print(accel);
+  Serial.print(" Mag:"); Serial.println(mag);
+  
+  // Wait for full calibration with timeout
+  int calibrationAttempts = 0;
+  const int maxAttempts = 300; // 30 seconds timeout
+  
+  while (sys < 3 && calibrationAttempts < maxAttempts) {
+    delay(100);
+    bno.getCalibration(&sys, &gyro, &accel, &mag);
+    Serial.print("SLAVE Calibration attempt "); Serial.print(calibrationAttempts);
+    Serial.print(" - Sys:"); Serial.print(sys);
+    Serial.print(" Gyro:"); Serial.print(gyro);
+    Serial.print(" Accel:"); Serial.print(accel);
+    Serial.print(" Mag:"); Serial.println(mag);
+    
+    if (calibrationAttempts % 50 == 0) { // Every 5 seconds
+      Serial.println("SLAVE: Move sensor in figure-8 patterns and rotate around all axes!");
+    }
+    
+    calibrationAttempts++;
+  }
+  
+  if (sys >= 3) {
+    Serial.println("SLAVE: Full calibration achieved!");
+  } else {
+    Serial.println("SLAVE: Calibration timeout! Check sensor connections and try again.");
+  }
 
   // Create the BLE Device
   BLEDevice::init("ESP32_SLAVE");
@@ -207,11 +278,27 @@ void setup() {
  
 void loop() {
 
-  imu::Vector<3> euler = bno.getVector(Adafruit_BNO055::VECTOR_EULER);
+  imu::Quaternion quat = bno.getQuat();
+  imu::Vector<3> linearAccel = bno.getVector(Adafruit_BNO055::VECTOR_LINEARACCEL);
+
+  // Calculate and store acceleration magnitude for impact detection
+  float accelMagnitude = sqrt(linearAccel.x()*linearAccel.x() + linearAccel.y()*linearAccel.y() + linearAccel.z()*linearAccel.z());
+  accelBuffer[head] = accelMagnitude;
+
+  // Debug: Print raw quaternion values every 50 loops (1 second)
+  static int debugCounter = 0;
+  if (++debugCounter % 50 == 0) {
+    Serial.print("SLAVE Raw Quat W:"); Serial.print(quat.w(), 4);
+    Serial.print(" X:"); Serial.print(quat.x(), 4);
+    Serial.print(" Y:"); Serial.print(quat.y(), 4);
+    Serial.print(" Z:"); Serial.print(quat.z(), 4);
+    Serial.print(" | Norm:"); Serial.print(sqrt(quat.w()*quat.w() + quat.x()*quat.x() + quat.y()*quat.y() + quat.z()*quat.z()), 4);
+    Serial.println();
+  }
 
   // Only record data if recording is active
   if (recordingActive) {
-    buffer[head] = euler;  // Store current reading
+    buffer[head] = quat;  // Store current reading
     head = (head + 1) % bufferSize;  // Move head pointer
   }
 

@@ -92,7 +92,8 @@ void setup() {
 
 
 static const int bufferSize = 400; // Reduced from 400 to save memory
-imu::Vector<3> buffer[bufferSize];
+imu::Quaternion buffer[bufferSize];
+float accelBuffer[bufferSize]; // Track acceleration magnitude for impact detection
 int head = 0;
 
 bool swingActive = false;
@@ -119,27 +120,13 @@ bool swingDetected(){
     return false;
   }
 
-  // get the previous and ten back values
-  // wraps around bufferSize
-  int prev = (head - 1 + bufferSize) % bufferSize;
-  int tenBack = (head - 10 + bufferSize) % bufferSize;
-
-  auto curr = buffer[prev];    
-  auto earlier = buffer[tenBack]; 
-
-  // Increase threshold to 80 degrees for more realistic swing detection
-  if ((fabs(curr.x() - earlier.x()) > DETECT_ROTATION_THRESHOLD ||
-      fabs(curr.y() - earlier.y()) > DETECT_ROTATION_THRESHOLD ||
-      fabs(curr.z() - earlier.z()) > DETECT_ROTATION_THRESHOLD) &&
-      (currentAccel > DETECT_ACCEL_THRESHOLD))
-       {
+  // Simple acceleration-based swing detection
+  // Quaternions will be used for wrist pronation analysis, not swing detection
+  if (currentAccel > DETECT_ACCEL_THRESHOLD) {
     return true;
   }
 
-  if ((fabs(curr.x() - earlier.x()) > DETECT_ROTATION_THRESHOLD_LOW ||
-      fabs(curr.y() - earlier.y()) > DETECT_ROTATION_THRESHOLD_LOW ||
-      fabs(curr.z() - earlier.z()) > DETECT_ROTATION_THRESHOLD_LOW) &&
-      (currentAccel > DETECT_ACCEL_THRESHOLD_LOW)) {
+  if (currentAccel > DETECT_ACCEL_THRESHOLD_LOW) {
     return true;
   }
 
@@ -161,8 +148,21 @@ void sendSwingData(int startIndex, int endIndex) {
   // Give slave time to record data (swing duration + buffer)
   delay(100); // Small delay to ensure slave has started recording ==========
   
-  int maxPoints = 169; 
+  int maxPoints = 165; // Back to original 3 bytes per sample
   int pointsToSend = min(swingLength, maxPoints); // cuts off long swings
+
+  // Find peak impact point (maximum acceleration) within the swing
+  float maxAccel = 0;
+  int impactIndex = 0;
+  int currentIndex = startIndex;
+  
+  for (int i = 0; i < swingLength; i++) {
+    if (accelBuffer[currentIndex] > maxAccel) {
+      maxAccel = accelBuffer[currentIndex];
+      impactIndex = i; // Store relative index within swing
+    }
+    currentIndex = (currentIndex + 1) % bufferSize;
+  }
 
   //create binary packet 500bytes
   uint8_t binaryData[500];
@@ -172,29 +172,47 @@ void sendSwingData(int startIndex, int endIndex) {
   binaryData[dataIndex++] = swingId; // id for the swing
   binaryData[dataIndex++] = (uint8_t)(maxSpeed_mph * 2); // max speed of swing *2 for better accu
   binaryData[dataIndex++] = pointsToSend; // number of points to send
+  binaryData[dataIndex++] = (uint8_t)(impactIndex % 256); // impact index (peak acceleration point)
 
   // convert to binary
-  int currentIndex = startIndex; // where to start reading from buffer
+  currentIndex = startIndex; // reset to start reading from buffer
   int count = 0; // how many points weve processed
 
   // loops each data point in the swing and stops at endIndex
   while (count < pointsToSend && currentIndex != endIndex) {
-    // Timestamp (2 bytes - milliseconds since swing start)
-    //unsigned long timestamp = count * 20; // 0, 20, 40, 60... ms at 50Hz
-    //binaryData[dataIndex++] = (timestamp >> 8) & 0xFF;  // High byte
-    //binaryData[dataIndex++] = timestamp & 0xFF;// Low byte
     
-    // X, Y, Z values (3 bytes, signed)
-    binaryData[dataIndex++] = (int8_t)buffer[currentIndex].x();
-    binaryData[dataIndex++] = (int8_t)buffer[currentIndex].y();
-    binaryData[dataIndex++] = (int8_t)buffer[currentIndex].z();
+    // Send X, Y, and Z components (4 bytes) - W can be reconstructed on RN side
+    // X = roll (wrist pronation/supination), Y = pitch (wrist flexion/extension), Z = yaw (wrist rotation)
+    // Scale to fit in 12-bit range (-2048 to 2047)
+    // First normalize the quaternion to ensure values are in valid range
+    float w = buffer[currentIndex].w();
+    float x = buffer[currentIndex].x();
+    float y = buffer[currentIndex].y();
+    float z = buffer[currentIndex].z();
+    
+    // Clamp raw values to [-1.0, 1.0] range (no normalization)
+    x = constrain(x, -1.0f, 1.0f);
+    y = constrain(y, -1.0f, 1.0f);
+    
+    // Removed debug prints to prevent serial buffer overflow
+    
+    uint16_t x_scaled = (uint16_t)((x + 1.0f) * 1023.5f);
+    uint16_t y_scaled = (uint16_t)((y + 1.0f) * 1023.5f);
+    
+    // Pack 12-bit values efficiently: 3 bytes for X and Y
+    // First 2 bytes: X (12 bits) + Y (12 bits)
+    binaryData[dataIndex++] = (uint8_t)(x_scaled & 0xFF);           // X low byte
+    binaryData[dataIndex++] = (uint8_t)((x_scaled >> 8) & 0x0F) |   // X high 4 bits
+                              (uint8_t)((y_scaled << 4) & 0xF0);     // Y low 4 bits
+    binaryData[dataIndex++] = (uint8_t)((y_scaled >> 4) & 0xFF);    // Y high 8 bits
     
     currentIndex = (currentIndex + 1) % bufferSize;
     count++;
   }
   Serial.print("Sending BLE data: ");
   Serial.print(dataIndex);
-  Serial.println(" bytes");
+  Serial.print(" bytes | Impact at sample: ");
+  Serial.println(impactIndex);
 
   pCharacteristic->setValue(binaryData, dataIndex);
   pCharacteristic->indicate();
@@ -237,6 +255,9 @@ void calculateSpeed(float ax, float ay, float az) {
   float accelMagnitude = sqrt(ax*ax + ay*ay + az*az);
   currentAccel = accelMagnitude;
   
+  // Store acceleration magnitude in buffer for impact detection
+  accelBuffer[head] = accelMagnitude;
+  
   if (accelMagnitude < DRIFT_THRESHOLD) {
     // Reset velocity when device is at rest to prevent drift
     vx = 0;
@@ -260,21 +281,24 @@ int noDetected = 0;
 
 void loop() {
   // get sensor data
-  imu::Vector<3> euler = bno.getVector(Adafruit_BNO055::VECTOR_EULER);
+  imu::Quaternion quat = bno.getQuat();
   imu::Vector<3> linearAccel = bno.getVector(Adafruit_BNO055::VECTOR_LINEARACCEL);
 
   calculateSpeed(linearAccel.x(), linearAccel.y(), linearAccel.z());
   maxSpeed_mph = maxSpeed * 2.23694;
   //Serial.print("Max Speed of swing in mph: "); Serial.println(maxSpeed_mph);
 
-  // test prints
-  //Serial.print("X: "); Serial.print(euler.x());
-  //Serial.print(" Y: "); Serial.print(euler.y());
-  //Serial.print(" Z: "); Serial.println(euler.z());
+  // Quaternion debug prints
+  //Serial.print("Quat W: "); Serial.print(quat.w(), 4);
+  //Serial.print(" X: "); Serial.print(quat.x(), 4);
+  //Serial.print(" Y: "); Serial.print(quat.y(), 4);
+  //Serial.print(" Z: "); Serial.print(quat.z(), 4);
+  //Serial.print(" | Accel: "); Serial.print(currentAccel, 2);
+  //Serial.print(" | Speed: "); Serial.println(maxSpeed_mph, 1);
 
 
 
-  buffer[head] = euler;  // Store current reading
+  buffer[head] = quat;  // Store current reading
   head = (head + 1) % bufferSize;  // Move head pointer
 
   if (swingDetected() && !swingActive) {

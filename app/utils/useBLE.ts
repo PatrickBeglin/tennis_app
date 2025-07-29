@@ -11,11 +11,11 @@ const SLAVE_CHARACTERISTIC_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a9"   // Sl
 
 // Global variable to store sensor data - accessible from anywhere
 export let globalSensorData: {[deviceId: string]: any} = {};
-console.log("USE BLE TEST Global sensor data:", globalSensorData);
 
 // Function to update global sensor data
 export const updateGlobalSensorData = (newData: {[deviceId: string]: any}) => {
     globalSensorData = { ...globalSensorData, ...newData };
+    //console.log("dataaaaaaaaaaaaa:", globalSensorData);
 };
 
 interface BluetoothLowEnergyApi {
@@ -302,7 +302,7 @@ function useBLE(): BluetoothLowEnergyApi {
 
             if (deviceId === 0x02) {
                 const tennisData = processBinaryData(rawData);
-                console.log("MASTERTennis Data:", tennisData);
+                //console.log("MASTERTennis Data:", tennisData);
 
                 setSensorData(prev => ({
                     ...prev,
@@ -316,7 +316,7 @@ function useBLE(): BluetoothLowEnergyApi {
 
             } else if (deviceId === 0x03) {
                 const tennisData = processBinaryData(rawData);
-                console.log("SLAVE Tennis Data:", tennisData);
+                //console.log("SLAVE Tennis Data:", tennisData);
 
                 setSensorData(prev => ({
                     ...prev,
@@ -336,6 +336,56 @@ function useBLE(): BluetoothLowEnergyApi {
         }
     } 
 
+    const unpack12BitQuaternion = (buffer: Buffer, offset: number) => {
+        // Extract X (12 bits) and Y (12 bits) from first 3 bytes
+        const byte0 = buffer[offset];
+        const byte1 = buffer[offset + 1];
+        const byte2 = buffer[offset + 2];
+        const x_scaled = byte0 | ((byte1 & 0x0F) << 8);
+        const y_scaled = ((byte1 & 0xF0) >> 4) | (byte2 << 4);
+        const x = (x_scaled / 1023.5) - 1;
+        const y = (y_scaled / 1023.5) - 1;
+        const z = 0; // Z is always 0 in 3-byte format
+        return { x, y, z };
+    };
+
+    const calculateQuaternion = (x: number, y: number, z: number) => {
+        let w = 0;
+    
+        const magSq = x * x + y * y + z * z;
+        
+        console.log(`🔍 CALC - Input: x=${x}, y=${y}, z=${z}, magSq=${magSq}`);
+    
+        if (magSq < 1.0) {
+            w = Math.sqrt(1.0 - magSq);
+            console.log(`🔍 CALC - Valid case: w=${w}`);
+        } else {
+            const norm = Math.sqrt(magSq);
+            x /= norm;
+            y /= norm;
+            z /= norm;
+            w = 0;
+            console.log(`🔍 CALC - Invalid case: normalized x=${x}, y=${y}, z=${z}, w=${w}`);
+        }
+    
+        // Final normalization (if needed)
+        const finalMag = Math.sqrt(w * w + x * x + y * y + z * z);
+        console.log(`🔍 CALC - Before final norm: w=${w}, x=${x}, y=${y}, z=${z}, finalMag=${finalMag}`);
+        
+        const result = {
+            w: w / finalMag,
+            x: x / finalMag,
+            y: y / finalMag,
+            z: z / finalMag
+        };
+        
+        const finalMagnitude = Math.sqrt(result.w * result.w + result.x * result.x + result.y * result.y + result.z * result.z);
+        console.log(`🔍 CALC - Final magnitude: ${finalMagnitude}`);
+        
+        return result;
+    };
+    
+
 
     const processBinaryData = (buffer: Buffer) => { // buffer will be rawdata
         let offset = 0; // current position in the buffer
@@ -344,19 +394,26 @@ function useBLE(): BluetoothLowEnergyApi {
         const swingId = buffer[offset++];
         const maxSpeed = buffer[offset++] / 2; // divide by 2 to get acc mph
         const pointsToSend = buffer[offset++];
+        const impactIndex = buffer[offset++];
 
         const swingData = [];
 
         for (let i = 0; i < pointsToSend; i++) {
 
-            const x = buffer.readInt8(offset++);
-            const y = buffer.readInt8(offset++);
-            const z = buffer.readInt8(offset++);
+            const { x, y, z } = unpack12BitQuaternion(buffer, offset);
+            const { w } = calculateQuaternion(x, y, z);
+            offset += 3;
+
+            // Debug: Log first few samples to see raw values
+            if (i < 3) {
+                console.log(`Sample ${i} raw unpacked: x=${x}, y=${y}, z=${z}, reconstructed: w=${w}`);
+            }
 
             swingData.push({
                 x: x,
                 y: y,
                 z: z,
+                w: w,
             })
         }
         if (deviceId === 0x03) {
@@ -364,6 +421,7 @@ function useBLE(): BluetoothLowEnergyApi {
                 device_id: "ESP32_SLAVE",
                 swing_id: swingId,
                 max_speed: maxSpeed,
+                impact_index: impactIndex,
                 swing: swingData,
 
             }
@@ -373,6 +431,7 @@ function useBLE(): BluetoothLowEnergyApi {
                 device_id: "ESP32_MASTER",
                 swing_id: swingId,
                 max_speed: maxSpeed,
+                impact_index: impactIndex,
                 swing: swingData,
             }
         }
@@ -381,10 +440,10 @@ function useBLE(): BluetoothLowEnergyApi {
                 device_id: "UNKNOWN",
                 swing_id: swingId,
                 max_speed: maxSpeed,
+                impact_index: impactIndex,
                 swing: swingData,
             }
-        }
-        
+        }  
     }
 
 
