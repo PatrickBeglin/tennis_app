@@ -36,6 +36,11 @@ let averageSwingSpeedScore = 0;
 let swingScoresArray: number[] = [];
 let wristScoresArray: number[] = [];
 
+let pronationSpeedArray: number[] = [];
+let bestPronationSpeed = 0;
+let pronationSpeed = 0;
+let lastMeaningfulPronationSpeedDelta = "0°/s";
+
 // Helper function to update grid scores
 const updateGridScores = () => {
     averageWristScore = wristScoresArray.length > 0 ? wristScoresArray.reduce((a, b) => a + b, 0) / wristScoresArray.length : 0;
@@ -68,71 +73,20 @@ const normalizeDataLengths = (MasterData: any, SlaveData: any) => {
     return masterLength;
 };
 
-// Helper function to calculate max wrist pronation using quaternions
 const calculateMaxWristPronation = (MasterData: any, SlaveData: any, dataLength: number): number => {
     let maxPronation = 0;
 
-    // Debug: Log first sample to check sensor alignment
-    if (dataLength > 0) {
-        const w = MasterData.swing[0]; // wrist
-        const u = SlaveData.swing[0];  // upper arm
-        console.log("DEBUG - First sample quaternions:");
-        console.log("Wrist (w,x,y,z):", w.w.toFixed(4), w.x.toFixed(4), w.y.toFixed(4), w.z.toFixed(4));
-        console.log("Upper arm (w,x,y,z):", u.w.toFixed(4), u.x.toFixed(4), u.y.toFixed(4), u.z.toFixed(4));
-        
-        // Check if sensors might be 180° rotated (inverse quaternions)
-        const dot = w.w * u.w + w.x * u.x + w.y * u.y + w.z * u.z;
-        console.log("Dot product (should be ~1.0 if aligned, ~-1.0 if 180° off):", dot.toFixed(4));
-        
-        if (dot < -0.5) {
-            console.log("WARNING: Sensors appear to be 180° rotated! Consider inverting one sensor.");
-        }
-    }
-
-    // Helper function to multiply quaternions
-    const quaternionMultiply = (q1: any, q2: any) => {
-        return {
-            w: q1.w * q2.w - q1.x * q2.x - q1.y * q2.y - q1.z * q2.z,
-            x: q1.w * q2.x + q1.x * q2.w + q1.y * q2.z - q1.z * q2.y,
-            y: q1.w * q2.y - q1.x * q2.z + q1.y * q2.w + q1.z * q2.x,
-            z: q1.w * q2.z + q1.x * q2.y - q1.y * q2.x + q1.z * q2.w
-        };
-    };
-
-    // Helper function to get quaternion conjugate (inverse for unit quaternions)
-    const quaternionConjugate = (q: any) => {
-        return { w: q.w, x: -q.x, y: -q.y, z: -q.z };
-    };
-
+    // Just find the highest pronation value from slave data (already scaled in useBLE)
     for (let i = 0; i < dataLength; i++) {
-        const wristQuat = MasterData.swing[i]; // wrist (already normalized)
-        const upperArmQuat = SlaveData.swing[i];  // upper arm (already normalized)
-
-        // Calculate relative quaternion: relativeQuat = upperArmConjugate * wristQuat
-        // This gives us the rotation from upper arm to wrist
-        const upperArmConjugate = quaternionConjugate(upperArmQuat);
-        const relativeQuat = quaternionMultiply(upperArmConjugate, wristQuat);
-
-        // Use Y-axis rotation as the primary pronation axis (most reliable for wrist pronation)
-        // Y-axis typically represents wrist pronation/supination
-        const pronationAngle = Math.atan2(
-            2 * (relativeQuat.w * relativeQuat.y + relativeQuat.x * relativeQuat.z),
-            1 - 2 * (relativeQuat.y * relativeQuat.y + relativeQuat.z * relativeQuat.z)
-        ) * (180 / Math.PI);
-
-        // Track maximum absolute pronation
-        const absPronation = Math.abs(pronationAngle);
-        if (absPronation > maxPronation) {
-            maxPronation = absPronation;
+        const pronationValue = SlaveData.swing[i]; // This is already the pronation value in degrees
+        if (pronationValue > maxPronation) {
+            maxPronation = pronationValue;
         }
     }
 
-    console.log("Wrist pronation angle:", maxPronation);
+    console.log("Max wrist pronation from slave:", maxPronation);
     return maxPronation;
 };
-
-
-
 
 // Helper function to get rotation tip
 const getRotationTip = (maxYRotationDifference: number): string => {
@@ -309,6 +263,88 @@ const getSwingSpeedTip = (swingSpeed: number): string => {
     }
 };
 
+const getPronationSpeed = (MasterData: any): string => {
+    let currentPronationSpeed = MasterData.pronation_speed || 0; // Get from master, not slave
+    console.log("Pronation speed:", currentPronationSpeed);
+    return String(Math.round(currentPronationSpeed)) + "°/s";
+};
+
+const updatePronationSpeedAverages = (newPronationSpeed: number) => {
+    // Only add new score if it's different from the last one (indicating a new swing)
+    if (pronationSpeedArray.length === 0 || newPronationSpeed !== pronationSpeedArray[pronationSpeedArray.length - 1]) {
+        pronationSpeedArray.push(newPronationSpeed);
+        
+        // Update best pronation speed
+        if (newPronationSpeed > bestPronationSpeed) {
+            bestPronationSpeed = newPronationSpeed;
+        }
+    }
+};
+
+const getPronationSpeedAverage = (): string => {    
+    let total = pronationSpeedArray.length > 0 ? pronationSpeedArray.reduce((a, b) => a + b, 0) / pronationSpeedArray.length : 0;
+    return String(Math.round(total)) + "°/s";
+}
+
+const getPronationSpeedDelta = (currentPronationSpeed: number): string => {
+    let lastPronationSpeed = 0;
+    if (pronationSpeedArray.length > 0) {   
+        lastPronationSpeed = pronationSpeedArray[pronationSpeedArray.length - 1];
+    }
+    let pronationSpeedDelta = currentPronationSpeed - lastPronationSpeed;
+    if (pronationSpeedDelta > 0) {
+        lastMeaningfulPronationSpeedDelta = "+" + String(Math.round(pronationSpeedDelta)) + "°/s";
+    } else {
+        lastMeaningfulPronationSpeedDelta = String(Math.round(pronationSpeedDelta)) + "°/s";
+    }
+    return lastMeaningfulPronationSpeedDelta;
+}
+
+const getPronationSpeedScore = (currentPronationSpeed: number): string => {
+    let pronationSpeedScore = Math.round((currentPronationSpeed / 1500) * 100);
+    return String(pronationSpeedScore);
+}
+
+const getPronationSpeedStatus = (currentPronationSpeed: number): string => {
+    if (currentPronationSpeed < 500) {
+        return "Poor";
+    } else if (currentPronationSpeed < 1000) {
+        return "Ok";
+    } else if (currentPronationSpeed < 1500) {
+        return "Good";
+    } else {
+        return "Excellent";
+    }
+}
+
+const getPronationSpeedStatusColor = (currentPronationSpeed: number): string => {
+    if (currentPronationSpeed < 500) {
+        return "#FF0000";
+    } else if (currentPronationSpeed < 1000) {
+        return "#FFE400";
+    } else if (currentPronationSpeed < 1500) {
+        return "#B6FF7A";
+    } else {
+        return "#00FF36";
+    }
+}
+
+const getPronationSpeedTip = (currentPronationSpeed: number): string => {
+    if (currentPronationSpeed < 500) {
+        return "Focus on generating more power through your legs and core rotation.";
+    } else if (currentPronationSpeed < 1000) {
+        return "Work on your timing and follow-through to increase swing speed.";
+    } else if (currentPronationSpeed < 1500) {
+        return "Excellent speed! Maintain this level while working on precision.";
+    } else {
+        return "No data available";
+    }
+}
+
+const getPronationSpeedSliderValue = (currentPronationSpeed: number): number => {
+    return (currentPronationSpeed / 2000);
+}
+
 
 // Main function to process the data
 export const processLiveData = () => {
@@ -328,12 +364,11 @@ export const processLiveData = () => {
     // Calculate max wrist pronation using quaternions
     let maxPronation = calculateMaxWristPronation(MasterData, SlaveData, dataLength);
     
-    if (maxPronation > bestYRotationDifference) {
+    if (maxPronation > bestYRotationDifference && maxPronation < 120) {
         bestYRotationDifference = maxPronation;
     }
     console.log("Wrist pronation angle:", maxPronation);
 
-    let wristValue = String((Math.round(maxPronation)) + "°");
 
     // Get rotation tip
     let rotationTip = getRotationTip(maxPronation);
@@ -371,6 +406,9 @@ export const processLiveData = () => {
     // Update swing speed averages
     updateSpeedAverages(swingSpeed);
 
+    // Get pronation speed and update averages
+    let currentPronationSpeed = MasterData.pronation_speed || 0;
+    updatePronationSpeedAverages(currentPronationSpeed);
 
     let formattedData = [
         {
@@ -386,7 +424,7 @@ export const processLiveData = () => {
             status: wristStatus,
             statusColor: wristStatusColor,
             sliderValue: wristSliderValue,
-            sliderGradient: [0.44,0.5,0.6,0.66]
+            sliderGradient: [0.44,0.51,0.61,0.66]
         },
         {
             title: 'Swing Speed',
@@ -402,6 +440,21 @@ export const processLiveData = () => {
             statusColor: calculateSwingStatusColor(swingSpeed),
             sliderValue: calculateSwingSliderValue(swingSpeed),
             sliderGradient: [0.8,0.85,1,1]
+        },
+        {
+            title: 'Pronation Speed',
+            value: getPronationSpeed(MasterData),
+            delta: getPronationSpeedDelta(currentPronationSpeed),
+            avg: getPronationSpeedAverage(),
+            best: String(Math.round(bestPronationSpeed)) + "°/s",
+            score: getPronationSpeedScore(currentPronationSpeed),
+            label: ["0 °/s", "2000 °/s"],
+            proRange: "1500+°/s",
+            tip: getPronationSpeedTip(currentPronationSpeed),
+            status: getPronationSpeedStatus(currentPronationSpeed),
+            statusColor: getPronationSpeedStatusColor(currentPronationSpeed),
+            sliderValue: getPronationSpeedSliderValue(currentPronationSpeed),
+            sliderGradient: [0.75,0.8,1,1]
         },
         {
             title: 'Contact Timing',

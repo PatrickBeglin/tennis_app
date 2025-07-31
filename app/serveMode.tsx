@@ -43,10 +43,10 @@ export default function AboutScreen() {
     tip: 'No data available',
     status: 'No Data',
     statusColor: '#666666',
-    sliderValue: 0
+    sliderValue: 0.5
   };
   const speedData = swingData[1] || {
-    title: 'Speed',
+    title: 'Swing Speed',
     value: '0',
     delta: '0',
     avg: '0',
@@ -57,11 +57,25 @@ export default function AboutScreen() {
     tip: 'No data available',
     status: 'No Data',
     statusColor: '#666666',
-    sliderValue: 0
+    sliderValue: 0.5
+  };
+  const pronationSpeedData = swingData[2] || {
+    title: 'Pronation Speed',
+    value: '0',
+    delta: '0',
+    avg: '0',
+    best: '0',
+    score: '0',
+    label: ['0°/s', '1000°/s'],
+    proRange: '500+°/s',
+    tip: 'No data available',
+    status: 'No Data',
+    statusColor: '#666666',
+    sliderValue: 0.5
   };
   
   // Extract session summary data
-  const sessionSummaryData = swingData[3] || {
+  const sessionSummaryData = swingData[4] || {
     title: 'Session Summary',
     timePlayed: "0mins",
     totalServes: 0,
@@ -115,6 +129,7 @@ export default function AboutScreen() {
                   <Text style={styles.sectionTitle}>Previous Serve</Text>
                   <PostServe type="wrist" data={wristData} expanded={false} onToggle={() => {}} />
                   <PostServe type="speed" data={speedData} expanded={false} onToggle={() => {}} />
+                  <PostServe type="pronationSpeed" data={pronationSpeedData} expanded={false} onToggle={() => {}} />
                   <Text style={styles.sectionTitle}>Session Summary</Text>
                   <View style={styles.statTotalCard}>
                     <StatTotals data={sessionSummaryData} />

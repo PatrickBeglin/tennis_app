@@ -12,7 +12,6 @@
 uint8_t slaveAddress[] = {0xE8, 0x6B, 0xEA, 0x2F, 0xE8, 0x48};
 esp_now_peer_info_t peerInfo;
 
-
 BLEServer* pServer = NULL;
 BLECharacteristic* pCharacteristic = NULL;
 bool deviceConnected = false;
@@ -42,10 +41,44 @@ void setup() {
   
   if(!bno.begin()) {
     Serial.println("BNO055 error");
+    ESP.restart();
   } else {
     Serial.println("BNO055 OK");
   }
-
+  delay(1000);
+  bno.setExtCrystalUse(true);
+  
+  // Check calibration status (need all sensors for swing detection and speed calculation)
+  uint8_t sys, gyro, accel, mag;
+  bno.getCalibration(&sys, &gyro, &accel, &mag);
+  Serial.print("MASTER Calibration - Sys:"); Serial.print(sys);
+  Serial.print(" Gyro:"); Serial.print(gyro);
+  Serial.print(" Accel:"); Serial.print(accel);
+  Serial.print(" Mag:"); Serial.println(mag);
+  
+  // Wait for full calibration with timeout
+  int calibrationAttempts = 0;
+  const int maxAttempts = 300; // 30 seconds timeout
+  
+  while (sys < 3 && calibrationAttempts < maxAttempts) {
+    delay(100);
+    bno.getCalibration(&sys, &gyro, &accel, &mag);
+    if (calibrationAttempts % 50 == 0) { // Only print every 50 attempts (5 seconds)
+      Serial.print("MASTER Calibration attempt "); Serial.print(calibrationAttempts);
+      Serial.print(" - Sys:"); Serial.print(sys);
+      Serial.print(" Gyro:"); Serial.print(gyro);
+      Serial.print(" Accel:"); Serial.print(accel);
+      Serial.print(" Mag:"); Serial.println(mag);
+      Serial.println("MASTER: Move sensor in figure-8 patterns and rotate around all axes!");
+    }
+    calibrationAttempts++;
+  }
+  
+  if (sys >= 3) {
+    Serial.println("MASTER: Full calibration achieved!");
+  } else {
+    Serial.println("MASTER: Calibration timeout! Check sensor connections and try again.");
+  }
 
   // Create the BLE Device
   BLEDevice::init("ESP32_MASTER");
@@ -53,16 +86,28 @@ void setup() {
 
   // Create the BLE Server
   pServer = BLEDevice::createServer();
+  if (pServer == NULL) {
+    Serial.println("Failed to create BLE server");
+    ESP.restart();
+  }
   pServer->setCallbacks(new MyServerCallbacks());
 
   // Create the BLE Service
   BLEService *pService = pServer->createService(SERVICE_UUID);
+  if (pService == NULL) {
+    Serial.println("Failed to create BLE service");
+    ESP.restart();
+  }
 
   // Create a BLE Characteristic (simplified)
   pCharacteristic = pService->createCharacteristic(
                       MASTER_CHARACTERISTIC_UUID,
                       BLECharacteristic::PROPERTY_INDICATE | BLECharacteristic::PROPERTY_NOTIFY
                     );
+  if (pCharacteristic == NULL) {
+    Serial.println("Failed to create BLE characteristic");
+    ESP.restart();
+  }
 
   // Start the service
   pService->start();
@@ -75,7 +120,7 @@ void setup() {
   WiFi.mode(WIFI_STA);
   if (esp_now_init() != ESP_OK) {
     Serial.println("ESP-NOW error");
-    return;
+    ESP.restart();
   }
 
   memcpy(peerInfo.peer_addr, slaveAddress, 6);
@@ -84,17 +129,18 @@ void setup() {
 
   if (esp_now_add_peer(&peerInfo) != ESP_OK){
     Serial.println("Peer error");
-    return;
+    ESP.restart();
   }
 
   Serial.println("Ready");
 }
 
-
-static const int bufferSize = 400; // Reduced from 400 to save memory
-imu::Quaternion buffer[bufferSize];
+static const int bufferSize = 200; // Reduced from 400 to save memory
 float accelBuffer[bufferSize]; // Track acceleration magnitude for impact detection
+float gyroYBuffer[bufferSize]; // Track Y-axis gyroscope for rotation speed at contact
+float eulerZBuffer[bufferSize]; // Track Euler Z for rotation speed at contact
 int head = 0;
+bool recordingActive = false;
 
 bool swingActive = false;
 int swingStartIndex = 0;
@@ -113,6 +159,10 @@ const float DETECT_ACCEL_THRESHOLD_LOW = 4.0;
 // Global speed variable
 float maxSpeed_mph = 0;
 float currentAccel = 0;
+
+float fastestYrotationSpeed = 0;
+float currentEulerZ = 0;
+float swingFastestYrotationSpeed = 0; // Track fastest Y rotation during current swing
 
 bool swingDetected(){
   // Check cooldown first
@@ -133,9 +183,25 @@ bool swingDetected(){
   return false;
 }
 
+void startRecording() {
+  recordingActive = true;
+  head = 0; // Reset buffer to start fresh
+  swingFastestYrotationSpeed = 0; // Reset swing-specific fastest Y rotation
+  
+  // Clear the buffer to ensure no old data
+  for (int i = 0; i < bufferSize; i++) {
+    //buffer[i] = imu::Quaternion(1, 0, 0, 0); // Identity quaternion
+    accelBuffer[i] = 0.0f; // Clear acceleration buffer
+    gyroYBuffer[i] = 0.0f; // Clear gyro buffer
+    eulerZBuffer[i] = 0.0f; // Clear Euler Z buffer
+  }
+  
+  Serial.println("MASTER Recording started - buffer cleared");
+}
+
 void sendSwingData(int startIndex, int endIndex) {
   // Only send if swing has enough samples
-  int swingLength = (endIndex - startIndex + bufferSize) % bufferSize;
+  int swingLength = head; // Use head directly since we reset buffer
   if (swingLength < MIN_SWING_DURATION) {
     return;
   }
@@ -148,22 +214,25 @@ void sendSwingData(int startIndex, int endIndex) {
   // Give slave time to record data (swing duration + buffer)
   delay(100); // Small delay to ensure slave has started recording ==========
   
-  int maxPoints = 165; // Back to original 3 bytes per sample
+  int maxPoints = 99; // 5 bytes per sample (99 * 5 = 495 bytes, leaving room for header)
   int pointsToSend = min(swingLength, maxPoints); // cuts off long swings
 
   // Find peak impact point (maximum acceleration) within the swing
   float maxAccel = 0;
   int impactIndex = 0;
-  int currentIndex = startIndex;
   
-  for (int i = 0; i < swingLength; i++) {
-    if (accelBuffer[currentIndex] > maxAccel) {
-      maxAccel = accelBuffer[currentIndex];
+  for (int i = 0; i < swingLength && i < bufferSize; i++) {
+    if (accelBuffer[i] > maxAccel) {
+      maxAccel = accelBuffer[i];
       impactIndex = i; // Store relative index within swing
     }
-    currentIndex = (currentIndex + 1) % bufferSize;
   }
 
+  // Get fastest Y-axis rotation speed during the swing
+  float fastestYrotationSpeed = swingFastestYrotationSpeed;
+
+  float impactEulerZ = (impactIndex < bufferSize) ? eulerZBuffer[impactIndex] : 0.0f;
+  
   //create binary packet 500bytes
   uint8_t binaryData[500];
   int dataIndex = 0;
@@ -173,49 +242,20 @@ void sendSwingData(int startIndex, int endIndex) {
   binaryData[dataIndex++] = (uint8_t)(maxSpeed_mph * 2); // max speed of swing *2 for better accu
   binaryData[dataIndex++] = pointsToSend; // number of points to send
   binaryData[dataIndex++] = (uint8_t)(impactIndex % 256); // impact index (peak acceleration point)
+  binaryData[dataIndex++] = (uint8_t)((fastestYrotationSpeed + 2000) / 15.625); // Fastest Y-axis rotation during swing (8-bit, ±2000°/s range)
+  binaryData[dataIndex++] = (uint8_t)(impactEulerZ * 255.0f / 360.0f); // Euler Z angle at impact (0-360° mapped to 0-255) 
+  binaryData[dataIndex++] = 0; // mock pronation data
 
-  // convert to binary
-  currentIndex = startIndex; // reset to start reading from buffer
-  int count = 0; // how many points weve processed
 
-  // loops each data point in the swing and stops at endIndex
-  while (count < pointsToSend && currentIndex != endIndex) {
-    
-    // Send X, Y, and Z components (4 bytes) - W can be reconstructed on RN side
-    // X = roll (wrist pronation/supination), Y = pitch (wrist flexion/extension), Z = yaw (wrist rotation)
-    // Scale to fit in 12-bit range (-2048 to 2047)
-    // First normalize the quaternion to ensure values are in valid range
-    float w = buffer[currentIndex].w();
-    float x = buffer[currentIndex].x();
-    float y = buffer[currentIndex].y();
-    float z = buffer[currentIndex].z();
-    
-    // Clamp raw values to [-1.0, 1.0] range (no normalization)
-    x = constrain(x, -1.0f, 1.0f);
-    y = constrain(y, -1.0f, 1.0f);
-    
-    // Removed debug prints to prevent serial buffer overflow
-    
-    uint16_t x_scaled = (uint16_t)((x + 1.0f) * 1023.5f);
-    uint16_t y_scaled = (uint16_t)((y + 1.0f) * 1023.5f);
-    
-    // Pack 12-bit values efficiently: 3 bytes for X and Y
-    // First 2 bytes: X (12 bits) + Y (12 bits)
-    binaryData[dataIndex++] = (uint8_t)(x_scaled & 0xFF);           // X low byte
-    binaryData[dataIndex++] = (uint8_t)((x_scaled >> 8) & 0x0F) |   // X high 4 bits
-                              (uint8_t)((y_scaled << 4) & 0xF0);     // Y low 4 bits
-    binaryData[dataIndex++] = (uint8_t)((y_scaled >> 4) & 0xFF);    // Y high 8 bits
-    
-    currentIndex = (currentIndex + 1) % bufferSize;
-    count++;
-  }
   Serial.print("Sending BLE data: ");
   Serial.print(dataIndex);
   Serial.print(" bytes | Impact at sample: ");
   Serial.println(impactIndex);
 
-  pCharacteristic->setValue(binaryData, dataIndex);
-  pCharacteristic->indicate();
+  if (pCharacteristic != NULL) {
+    pCharacteristic->setValue(binaryData, dataIndex);
+    pCharacteristic->indicate();
+  }
   
   // Wait for BLE transmission to complete before requesting slave data
   delay(1000);
@@ -230,6 +270,25 @@ void sendTriggerToSlave() {
     Serial.println("Trigger sent");
   } else {
     Serial.println("Trigger error");
+  }
+}
+
+void floatToBytes(float value, uint8_t *bytes) {
+  memcpy(bytes, &value, sizeof(float));
+}
+
+// send quaternion to slave
+void sendQuaternionToSlave(imu::Quaternion quat) {
+  uint8_t quaternionData[17]; // 16 bytes for quaternion + 1 byte for command
+  quaternionData[0] = 0x03; // Command 0x03 for quaternion data
+  floatToBytes(quat.w(), &quaternionData[1]);
+  floatToBytes(quat.x(), &quaternionData[5]);
+  floatToBytes(quat.y(), &quaternionData[9]);
+  floatToBytes(quat.z(), &quaternionData[13]);
+
+  esp_err_t result = esp_now_send(slaveAddress, quaternionData, 17);
+  if (result != ESP_OK) {
+    Serial.println("Quaternion error sending to slave");
   }
 }
 
@@ -249,14 +308,15 @@ float maxSpeed = 0;
 const float dt = 0.02; // 50hz to calculate speed from acceleration
 const float DRIFT_THRESHOLD = 1.5; // Threshold to detect when device is at rest 
 
-
 void calculateSpeed(float ax, float ay, float az) {
   // Check if device is at rest (low acceleration)
   float accelMagnitude = sqrt(ax*ax + ay*ay + az*az);
   currentAccel = accelMagnitude;
   
   // Store acceleration magnitude in buffer for impact detection
-  accelBuffer[head] = accelMagnitude;
+  if (head < bufferSize) {
+    accelBuffer[head] = accelMagnitude;
+  }
   
   if (accelMagnitude < DRIFT_THRESHOLD) {
     // Reset velocity when device is at rest to prevent drift
@@ -280,38 +340,57 @@ const int SWING_END_SETTLE_SAMPLES = 5;
 int noDetected = 0;
 
 void loop() {
-  // get sensor data
-  imu::Quaternion quat = bno.getQuat();
-  imu::Vector<3> linearAccel = bno.getVector(Adafruit_BNO055::VECTOR_LINEARACCEL);
+  // get sensor data with error checking
+  imu::Quaternion quat;
+  imu::Vector<3> linearAccel;
+  imu::Vector<3> angularVel;
+  imu::Vector<3> euler;
+  
+  try {
+    quat = bno.getQuat();
+    linearAccel = bno.getVector(Adafruit_BNO055::VECTOR_LINEARACCEL);
+    angularVel = bno.getVector(Adafruit_BNO055::VECTOR_GYROSCOPE);
+    euler = bno.getVector(Adafruit_BNO055::VECTOR_EULER);
+  } catch (...) {
+    Serial.println("Sensor read error, restarting...");
+    ESP.restart();
+  }
+
+  // Calculate Y-axis rotation speed
+  float currentYrotationSpeed = angularVel.y();
+  if (currentYrotationSpeed > fastestYrotationSpeed) {
+    fastestYrotationSpeed = currentYrotationSpeed;
+  }
+
+  currentEulerZ = euler.z();
 
   calculateSpeed(linearAccel.x(), linearAccel.y(), linearAccel.z());
   maxSpeed_mph = maxSpeed * 2.23694;
-  //Serial.print("Max Speed of swing in mph: "); Serial.println(maxSpeed_mph);
 
-  // Quaternion debug prints
-  //Serial.print("Quat W: "); Serial.print(quat.w(), 4);
-  //Serial.print(" X: "); Serial.print(quat.x(), 4);
-  //Serial.print(" Y: "); Serial.print(quat.y(), 4);
-  //Serial.print(" Z: "); Serial.print(quat.z(), 4);
-  //Serial.print(" | Accel: "); Serial.print(currentAccel, 2);
-  //Serial.print(" | Speed: "); Serial.println(maxSpeed_mph, 1);
-
-
-
-  buffer[head] = quat;  // Store current reading
-  head = (head + 1) % bufferSize;  // Move head pointer
+  // Only record data if recording is active
+  if (recordingActive && head < bufferSize) {
+    accelBuffer[head] = currentAccel;  // Store acceleration magnitude
+    gyroYBuffer[head] = currentYrotationSpeed;  // Store Y-axis gyroscope
+    eulerZBuffer[head] = currentEulerZ;  // Store Euler Z angle
+    
+    // Track fastest Y rotation during this swing
+    if (currentYrotationSpeed > swingFastestYrotationSpeed) {
+      swingFastestYrotationSpeed = currentYrotationSpeed;
+    }
+    
+    head = (head + 1) % bufferSize;  // Move head pointer
+  }
 
   if (swingDetected() && !swingActive) {
     Serial.println("Swing start");
     swingActive = true;
-    swingStartIndex = (head - 1 + bufferSize) % bufferSize;
+    startRecording(); // Start recording with fresh buffer
     swingSampleCount = 0;
-
   }
-
 
   if (swingActive) {
     swingSampleCount++;  // Count samples during swing
+
 
     if (!swingDetected()) {
       noDetected++;
@@ -321,13 +400,13 @@ void loop() {
 
     if (noDetected > SWING_END_SETTLE_SAMPLES && swingSampleCount > MIN_SWING_DURATION) {
       swingActive = false;
-      swingEndIndex = (head - 1 + bufferSize) % bufferSize; // End at the position where swing ended
+      recordingActive = false; // Stop recording
       lastSwingTime = millis();  // Set cooldown timer
       
       Serial.print("Swing end: ");
       Serial.println(swingSampleCount);
       
-      sendSwingData(swingStartIndex, swingEndIndex);
+      sendSwingData(0, head); // Send data from start to current head position
 
       // Reset speed tracking for new swing
       maxSpeed = 0;
@@ -335,21 +414,18 @@ void loop() {
       vy = 0;
       vz = 0;
     }
-    
   }
+
+  sendQuaternionToSlave(quat);
   
   delay(BNO055_SAMPLERATE_DELAY_MS);
 
-  // notify changed value
-  if (deviceConnected) {
-      //Serial.println("sending data");
-      // pCharacteristic->setValue((uint8_t*)dataJson.c_str(), dataJson.length());
-      //pCharacteristic->notify(); 
-  }
   // disconnecting
   if (!deviceConnected && oldDeviceConnected) {
       delay(500);
-      pServer->startAdvertising();
+      if (pServer != NULL) {
+        pServer->startAdvertising();
+      }
       oldDeviceConnected = deviceConnected;
   }
   // connecting
