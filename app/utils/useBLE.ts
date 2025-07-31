@@ -346,7 +346,7 @@ function useBLE(): BluetoothLowEnergyApi {
 
         const deviceId = buffer[offset++]; // reads byte 0 then 1 etc
         const swingId = buffer[offset++];
-        const maxSpeed = buffer[offset++] / 2; // divide by 2 to get acc mph
+        const maxSpeed = (buffer[offset++] / 255.0) * 180.0; // Convert from 0-255 range back to 0-180 mph
         const pointsToSend = buffer[offset++];
         const impactIndex = buffer[offset++];
         const pronationSpeed = (buffer[offset++] * 15.625) - 2000; // Convert back to gyro reading (°/s)

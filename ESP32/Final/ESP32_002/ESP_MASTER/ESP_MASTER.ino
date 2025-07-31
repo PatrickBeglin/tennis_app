@@ -157,8 +157,14 @@ const float DETECT_ROTATION_THRESHOLD_LOW = 0;
 const float DETECT_ACCEL_THRESHOLD_LOW = 4.0;
 
 // Global speed variable
-float maxSpeed_mph = 0;
 float currentAccel = 0;
+
+// Speed calculation variables
+float vx = 0, vy = 0, vz = 0;
+float maxSpeed = 0;
+float maxSpeed_mph = 0; // maximum speed in mph
+const float dt = 0.02; // 50hz to calculate speed from acceleration
+const float DRIFT_THRESHOLD = 1.5; // Threshold to detect when device is at rest
 
 float fastestYrotationSpeed = 0;
 float currentEulerZ = 0;
@@ -239,7 +245,7 @@ void sendSwingData(int startIndex, int endIndex) {
 
   binaryData[dataIndex++] = 0x02; // the id for master
   binaryData[dataIndex++] = swingId; // id for the swing
-  binaryData[dataIndex++] = (uint8_t)(maxSpeed_mph * 2); // max speed of swing *2 for better accu
+  binaryData[dataIndex++] = (uint8_t)(maxSpeed_mph * 2); // max speed of swing *2 for better accuracy
   binaryData[dataIndex++] = pointsToSend; // number of points to send
   binaryData[dataIndex++] = (uint8_t)(impactIndex % 256); // impact index (peak acceleration point)
   binaryData[dataIndex++] = (uint8_t)((fastestYrotationSpeed + 2000) / 15.625); // Fastest Y-axis rotation during swing (8-bit, ±2000°/s range)
@@ -303,20 +309,12 @@ void requestDataFromSlave(uint8_t swingId, uint8_t pointsToSend) {
   }
 }
 
-float vx = 0, vy = 0, vz = 0;
-float maxSpeed = 0;
-const float dt = 0.02; // 50hz to calculate speed from acceleration
-const float DRIFT_THRESHOLD = 1.5; // Threshold to detect when device is at rest 
+// Speed calculation variables are now declared at the top with other globals
 
 void calculateSpeed(float ax, float ay, float az) {
   // Check if device is at rest (low acceleration)
   float accelMagnitude = sqrt(ax*ax + ay*ay + az*az);
   currentAccel = accelMagnitude;
-  
-  // Store acceleration magnitude in buffer for impact detection
-  if (head < bufferSize) {
-    accelBuffer[head] = accelMagnitude;
-  }
   
   if (accelMagnitude < DRIFT_THRESHOLD) {
     // Reset velocity when device is at rest to prevent drift
@@ -340,7 +338,7 @@ const int SWING_END_SETTLE_SAMPLES = 5;
 int noDetected = 0;
 
 void loop() {
-  // get sensor data with error checking
+  // 1) Read _once_ at the top
   imu::Quaternion quat;
   imu::Vector<3> linearAccel;
   imu::Vector<3> angularVel;
@@ -356,6 +354,10 @@ void loop() {
     ESP.restart();
   }
 
+  // Calculate acceleration magnitude for impact detection
+  float accelMagnitude = sqrt(linearAccel.x()*linearAccel.x() + linearAccel.y()*linearAccel.y() + linearAccel.z()*linearAccel.z());
+  currentAccel = accelMagnitude;
+
   // Calculate Y-axis rotation speed
   float currentYrotationSpeed = angularVel.y();
   if (currentYrotationSpeed > fastestYrotationSpeed) {
@@ -364,12 +366,20 @@ void loop() {
 
   currentEulerZ = euler.z();
 
+  // Calculate swing speed
   calculateSpeed(linearAccel.x(), linearAccel.y(), linearAccel.z());
   maxSpeed_mph = maxSpeed * 2.23694;
+  
+  // Debug print speed
+  if (recordingActive) {
+    Serial.print("Speed (mph): "); Serial.println(maxSpeed_mph);
+  }
+
+  Serial.print("maxSpeed_mph: ");  Serial.println(maxSpeed_mph);
 
   // Only record data if recording is active
   if (recordingActive && head < bufferSize) {
-    accelBuffer[head] = currentAccel;  // Store acceleration magnitude
+    accelBuffer[head] = accelMagnitude;  // Store acceleration magnitude
     gyroYBuffer[head] = currentYrotationSpeed;  // Store Y-axis gyroscope
     eulerZBuffer[head] = currentEulerZ;  // Store Euler Z angle
     
@@ -382,10 +392,11 @@ void loop() {
   }
 
   if (swingDetected() && !swingActive) {
-    Serial.println("Swing start");
     swingActive = true;
-    startRecording(); // Start recording with fresh buffer
+    swingStartIndex = (head - 1 + bufferSize) % bufferSize;
     swingSampleCount = 0;
+    startRecording(); // Start recording with fresh buffer (this sets recordingActive = true)
+    Serial.println("Swing start");
   }
 
   if (swingActive) {
@@ -414,6 +425,7 @@ void loop() {
       vy = 0;
       vz = 0;
     }
+
   }
 
   sendQuaternionToSlave(quat);
