@@ -197,8 +197,7 @@ void sendData(uint8_t swingId, uint8_t pointsToSend) {
   binaryData[dataIndex++] = (uint8_t)(impactIndex % 256); // impact index (peak acceleration point)
   binaryData[dataIndex++] = 0; // Mock gyro score (0 for slave - not used)
   binaryData[dataIndex++] = 0; // Mock eulerz score (0 for slave - not used)
-  binaryData[dataIndex++] = (uint8_t)(maxPronation * 255.0f / 360.0f); // in native code convert back by dividing by 255 and multiplying by 360
-  
+    
   Serial.print("Slave has ");
   Serial.print(head);
   Serial.print(" points, requested ");
