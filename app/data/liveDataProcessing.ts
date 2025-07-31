@@ -345,6 +345,16 @@ const getPronationSpeedSliderValue = (currentPronationSpeed: number): number => 
     return (currentPronationSpeed / 2000);
 }
 
+const getContactYEuler = (MasterData: any): string => {
+    let currentContactYEuler = MasterData.impact_euler_y || 0; // Get from master, not slave
+    return String(Math.round(currentContactYEuler)) + "°";
+}
+
+const getContactPronation = (MasterData: any, SlaveData: any): string => {
+    let currentContactPronation = SlaveData.swing[MasterData.impact_index] || 0; // Get from slave
+    return String(Math.round(currentContactPronation)) + "°";
+}
+
 
 // Main function to process the data
 export const processLiveData = () => {
@@ -442,7 +452,7 @@ export const processLiveData = () => {
             sliderGradient: [0.8,0.85,1,1]
         },
         {
-            title: 'Pronation Speed',
+            title: 'Wrist Pronation Speed',
             value: getPronationSpeed(MasterData),
             delta: getPronationSpeedDelta(currentPronationSpeed),
             avg: getPronationSpeedAverage(),
@@ -457,8 +467,23 @@ export const processLiveData = () => {
             sliderGradient: [0.75,0.8,1,1]
         },
         {
-            title: 'Contact Timing',
-            value: "0.00s",
+            title: 'Contact Angle',
+            value: getContactYEuler(MasterData),
+            delta: "0.00s",
+            avg: "0.00s",
+            best: "0.00s",
+            score: "0",
+            label: ["0.00s", "0.00s"],
+            proRange: "0.00s - 0.00s",
+            tip: "No data available",
+            status: "No Data",
+            statusColor: "#666666",
+            sliderValue: 0,
+            sliderGradient: [0.8,0.85,1,1]
+        },
+        {
+            title: 'Contact Pronation',
+            value: getContactPronation(MasterData, SlaveData),
             delta: "0.00s",
             avg: "0.00s",
             best: "0.00s",

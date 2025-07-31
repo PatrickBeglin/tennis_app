@@ -73,9 +73,37 @@ export default function AboutScreen() {
     statusColor: '#666666',
     sliderValue: 0.5
   };
+  const contactYEulerData = swingData[3] || {
+    title: 'Contact Angle',
+    value: '0°',
+    delta: '0°',
+    avg: '0°',
+    best: '0°',
+    score: '0',
+    label: ['0°', '180°'],
+    proRange: '80° - 120°',
+    tip: 'No data available',
+    status: 'No Data',
+    statusColor: '#666666',
+    sliderValue: 0.5
+  };
+  const contactPronationData = swingData[4] || {
+    title: 'Contact Wrist Pronation',
+    value: '0°',
+    delta: '0°',
+    avg: '0°',
+    best: '0°',
+    score: '0',
+    label: ['0°', '180°'],
+    proRange: '80° - 120°',
+    tip: 'No data available',
+    status: 'No Data',
+    statusColor: '#666666',
+    sliderValue: 0.5
+  };
   
   // Extract session summary data
-  const sessionSummaryData = swingData[4] || {
+  const sessionSummaryData = swingData[5] || {
     title: 'Session Summary',
     timePlayed: "0mins",
     totalServes: 0,
@@ -130,6 +158,8 @@ export default function AboutScreen() {
                   <PostServe type="wrist" data={wristData} expanded={false} onToggle={() => {}} />
                   <PostServe type="speed" data={speedData} expanded={false} onToggle={() => {}} />
                   <PostServe type="pronationSpeed" data={pronationSpeedData} expanded={false} onToggle={() => {}} />
+                  <PostServe type="contactYEuler" data={contactYEulerData} expanded={false} onToggle={() => {}} />
+                  <PostServe type="contactPronation" data={contactPronationData} expanded={false} onToggle={() => {}} />
                   <Text style={styles.sectionTitle}>Session Summary</Text>
                   <View style={styles.statTotalCard}>
                     <StatTotals data={sessionSummaryData} />

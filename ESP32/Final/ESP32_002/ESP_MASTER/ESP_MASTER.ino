@@ -137,8 +137,8 @@ void setup() {
 
 static const int bufferSize = 200; // Reduced from 400 to save memory
 float accelBuffer[bufferSize]; // Track acceleration magnitude for impact detection
-float gyroYBuffer[bufferSize]; // Track Y-axis gyroscope for rotation speed at contact
-float eulerZBuffer[bufferSize]; // Track Euler Z for rotation speed at contact
+float gyroXBuffer[bufferSize]; // Track X-axis gyroscope for wrist pronation analysis
+float eulerYBuffer[bufferSize]; // Track Euler Y angle
 int head = 0;
 bool recordingActive = false;
 
@@ -166,9 +166,9 @@ float maxSpeed_mph = 0; // maximum speed in mph
 const float dt = 0.02; // 50hz to calculate speed from acceleration
 const float DRIFT_THRESHOLD = 1.5; // Threshold to detect when device is at rest
 
-float fastestYrotationSpeed = 0;
-float currentEulerZ = 0;
-float swingFastestYrotationSpeed = 0; // Track fastest Y rotation during current swing
+float fastestXrotationSpeed = 0;
+float currentEulerY = 0;
+float swingFastestXrotationSpeed = 0; // Track fastest X rotation during current swing (wrist pronation)
 
 bool swingDetected(){
   // Check cooldown first
@@ -192,14 +192,14 @@ bool swingDetected(){
 void startRecording() {
   recordingActive = true;
   head = 0; // Reset buffer to start fresh
-  swingFastestYrotationSpeed = 0; // Reset swing-specific fastest Y rotation
+  swingFastestXrotationSpeed = 0; // Reset swing-specific fastest X rotation
   
   // Clear the buffer to ensure no old data
   for (int i = 0; i < bufferSize; i++) {
     //buffer[i] = imu::Quaternion(1, 0, 0, 0); // Identity quaternion
     accelBuffer[i] = 0.0f; // Clear acceleration buffer
-    gyroYBuffer[i] = 0.0f; // Clear gyro buffer
-    eulerZBuffer[i] = 0.0f; // Clear Euler Z buffer
+    gyroXBuffer[i] = 0.0f; // Clear gyro buffer
+    eulerYBuffer[i] = 0.0f; // Clear Euler Y buffer
   }
   
   Serial.println("MASTER Recording started - buffer cleared");
@@ -234,10 +234,14 @@ void sendSwingData(int startIndex, int endIndex) {
     }
   }
 
-  // Get fastest Y-axis rotation speed during the swing
-  float fastestYrotationSpeed = swingFastestYrotationSpeed;
 
-  float impactEulerZ = (impactIndex < bufferSize) ? eulerZBuffer[impactIndex] : 0.0f;
+
+  // Get fastest X-axis rotation speed during the swing (wrist pronation)
+  float fastestXrotationSpeed = swingFastestXrotationSpeed;
+
+  // Get values at impact point
+  float impactAngularVelocity = findAngularVelocityAtImpact(impactIndex);
+  float impactEulerY = findEulerYAtImpact(impactIndex);
   
   //create binary packet 500bytes
   uint8_t binaryData[500];
@@ -248,15 +252,19 @@ void sendSwingData(int startIndex, int endIndex) {
   binaryData[dataIndex++] = (uint8_t)(maxSpeed_mph * 2); // max speed of swing *2 for better accuracy
   binaryData[dataIndex++] = pointsToSend; // number of points to send
   binaryData[dataIndex++] = (uint8_t)(impactIndex % 256); // impact index (peak acceleration point)
-  binaryData[dataIndex++] = (uint8_t)((fastestYrotationSpeed + 2000) / 15.625); // Fastest Y-axis rotation during swing (8-bit, ±2000°/s range)
-  binaryData[dataIndex++] = (uint8_t)(impactEulerZ * 255.0f / 360.0f); // Euler Z angle at impact (0-360° mapped to 0-255) 
+  binaryData[dataIndex++] = (uint8_t)((fastestXrotationSpeed + 2000) / 15.625); // Fastest X-axis rotation during swing (wrist pronation, 8-bit, ±2000°/s range)
+  binaryData[dataIndex++] = (uint8_t)(impactEulerY * 255.0f / 360.0f); // Euler Y angle at impact (0-360° mapped to 0-255) 
   binaryData[dataIndex++] = 0; // mock pronation data
 
 
   Serial.print("Sending BLE data: ");
   Serial.print(dataIndex);
   Serial.print(" bytes | Impact at sample: ");
-  Serial.println(impactIndex);
+  Serial.print(impactIndex);
+  Serial.print(" | Angular Velocity at impact: ");
+  Serial.print(impactAngularVelocity);
+  Serial.print(" | Euler Y at impact: ");
+  Serial.println(impactEulerY);
 
   if (pCharacteristic != NULL) {
     pCharacteristic->setValue(binaryData, dataIndex);
@@ -309,6 +317,22 @@ void requestDataFromSlave(uint8_t swingId, uint8_t pointsToSend) {
   }
 }
 
+// Function to find the angular velocity at impact
+float findAngularVelocityAtImpact(int impactIndex) {
+  if (impactIndex >= 0 && impactIndex < bufferSize) {
+    return gyroXBuffer[impactIndex];
+  }
+  return 0.0f;
+}
+
+// Function to find the Y euler angle at impact
+float findEulerYAtImpact(int impactIndex) {
+  if (impactIndex >= 0 && impactIndex < bufferSize) {
+    return eulerYBuffer[impactIndex];
+  }
+  return 0.0f;
+}
+
 // Speed calculation variables are now declared at the top with other globals
 
 void calculateSpeed(float ax, float ay, float az) {
@@ -358,13 +382,13 @@ void loop() {
   float accelMagnitude = sqrt(linearAccel.x()*linearAccel.x() + linearAccel.y()*linearAccel.y() + linearAccel.z()*linearAccel.z());
   currentAccel = accelMagnitude;
 
-  // Calculate Y-axis rotation speed
-  float currentYrotationSpeed = angularVel.y();
-  if (currentYrotationSpeed > fastestYrotationSpeed) {
-    fastestYrotationSpeed = currentYrotationSpeed;
+  // Calculate X-axis rotation speed (wrist pronation)
+  float currentXrotationSpeed = angularVel.x();
+  if (currentXrotationSpeed > fastestXrotationSpeed) {
+    fastestXrotationSpeed = currentXrotationSpeed;
   }
 
-  currentEulerZ = euler.z();
+  currentEulerY = euler.y();
 
   // Calculate swing speed
   calculateSpeed(linearAccel.x(), linearAccel.y(), linearAccel.z());
@@ -380,12 +404,12 @@ void loop() {
   // Only record data if recording is active
   if (recordingActive && head < bufferSize) {
     accelBuffer[head] = accelMagnitude;  // Store acceleration magnitude
-    gyroYBuffer[head] = currentYrotationSpeed;  // Store Y-axis gyroscope
-    eulerZBuffer[head] = currentEulerZ;  // Store Euler Z angle
+    gyroXBuffer[head] = currentXrotationSpeed;  // Store X-axis gyroscope (wrist pronation)
+    eulerYBuffer[head] = currentEulerY;  // Store Euler Y angle
     
-    // Track fastest Y rotation during this swing
-    if (currentYrotationSpeed > swingFastestYrotationSpeed) {
-      swingFastestYrotationSpeed = currentYrotationSpeed;
+    // Track fastest X rotation during this swing (wrist pronation)
+    if (currentXrotationSpeed > swingFastestXrotationSpeed) {
+      swingFastestXrotationSpeed = currentXrotationSpeed;
     }
     
     head = (head + 1) % bufferSize;  // Move head pointer

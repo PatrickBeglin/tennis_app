@@ -350,7 +350,7 @@ function useBLE(): BluetoothLowEnergyApi {
         const pointsToSend = buffer[offset++];
         const impactIndex = buffer[offset++];
         const pronationSpeed = (buffer[offset++] * 15.625) - 2000; // Convert back to gyro reading (°/s)
-        const impactEulerZ = (buffer[offset++] * 360.0 / 255.0); // Convert back to Euler Z angle (0-255 mapped to 0-360°)
+        const impactEulerY = (buffer[offset++] * 360.0 / 255.0); // Convert back to Euler Y angle (0-255 mapped to 0-360°)
         const pronation = buffer[offset++] / 255.0 * 360.0; // pronation data
 
         const swingData = [];
@@ -374,7 +374,7 @@ function useBLE(): BluetoothLowEnergyApi {
                 max_speed: maxSpeed,
                 impact_index: impactIndex,
                 pronation_speed: pronationSpeed,
-                impact_euler_z: impactEulerZ,
+                impact_euler_y: impactEulerY,
                 pronation: pronation,
                 swing: swingData,
 
@@ -387,7 +387,7 @@ function useBLE(): BluetoothLowEnergyApi {
                 max_speed: maxSpeed,
                 impact_index: impactIndex,
                 pronation_speed: pronationSpeed,
-                impact_euler_z: impactEulerZ,
+                impact_euler_y: impactEulerY,
                 pronation: pronation,
                 swing: swingData,
             }
@@ -399,7 +399,7 @@ function useBLE(): BluetoothLowEnergyApi {
                 max_speed: maxSpeed,
                 impact_index: impactIndex,
                 pronation_speed: pronationSpeed,
-                impact_euler_z: impactEulerZ,
+                impact_euler_y: impactEulerY,
                 pronation: pronation,
                 swing: swingData,
             }
