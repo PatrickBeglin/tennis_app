@@ -24,14 +24,43 @@ Adafruit_BNO055 bno = Adafruit_BNO055(-1, 0x28, &Wire);
 #define SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
 #define MASTER_CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
 
+// Function declarations
+void sendPingToSlave();
+void sendTriggerToSlave();
+void sendQuaternionToSlave(imu::Quaternion quat);
+void requestDataFromSlave(uint8_t swingId, uint8_t pointsToSend);
+
 class MyServerCallbacks: public BLEServerCallbacks {
     void onConnect(BLEServer* pServer) {
       deviceConnected = true;
+      Serial.println("BLE Client connected!");
     };
 
     void onDisconnect(BLEServer* pServer) {
       deviceConnected = false;
+      Serial.println("BLE Client disconnected!");
     }
+};
+
+class MyCharacteristicCallbacks: public BLECharacteristicCallbacks {
+  void onWrite(BLECharacteristic* pCharacteristic) {
+      Serial.println("BLE Write received!");
+      
+      // Print raw bytes received
+      String value = pCharacteristic->getValue();
+      Serial.print("Raw data (hex): ");
+      for (int i = 0; i < value.length(); i++) {
+          Serial.print((uint8_t)value[i], HEX);
+          Serial.print(" ");
+      }
+      Serial.println();
+      Serial.print("Data length: ");
+      Serial.println(value.length());
+
+      // Accept any ping command (any data received)
+      Serial.println("Ping command detected, sending to slave...");
+      sendPingToSlave();
+  }
 };
 
 void setup() {
@@ -102,12 +131,22 @@ void setup() {
   // Create a BLE Characteristic (simplified)
   pCharacteristic = pService->createCharacteristic(
                       MASTER_CHARACTERISTIC_UUID,
-                      BLECharacteristic::PROPERTY_INDICATE | BLECharacteristic::PROPERTY_NOTIFY
+                      BLECharacteristic::PROPERTY_INDICATE | BLECharacteristic::PROPERTY_NOTIFY | BLECharacteristic::PROPERTY_WRITE
                     );
   if (pCharacteristic == NULL) {
     Serial.println("Failed to create BLE characteristic");
     ESP.restart();
   }
+
+  pCharacteristic->setCallbacks(new MyCharacteristicCallbacks());
+  
+  // Force WRITE_REQ (not WRITE_NO_RESPONSE)
+  pCharacteristic->setWriteProperty(true);
+  pCharacteristic->setWriteNoResponseProperty(false);
+  
+  // Debug: Check characteristic UUID
+  Serial.print("Characteristic UUID: ");
+  Serial.println(pCharacteristic->getUUID().toString().c_str());
 
   // Start the service
   pService->start();
@@ -152,9 +191,9 @@ int swingSampleCount = 0;  // Track samples during swing
 
 // change these to get accurate swing detection
 const float DETECT_ROTATION_THRESHOLD = 0;
-const float DETECT_ACCEL_THRESHOLD = 8.0;
+const float DETECT_ACCEL_THRESHOLD = 35.0;
 const float DETECT_ROTATION_THRESHOLD_LOW = 0;
-const float DETECT_ACCEL_THRESHOLD_LOW = 4.0;
+const float DETECT_ACCEL_THRESHOLD_LOW = 20.0;
 
 // Global speed variable
 float currentAccel = 0;
@@ -276,6 +315,18 @@ void sendSwingData(int startIndex, int endIndex) {
   requestDataFromSlave(swingId, pointsToSend);
 }
 
+
+void sendPingToSlave() {
+  uint8_t pingData[1] = {0x04}; // Command to start recording
+  
+  esp_err_t result = esp_now_send(slaveAddress, pingData, 1);
+  if (result == ESP_OK) {
+    Serial.println("Ping sent");
+  } else {
+    Serial.println("Ping error");
+  }
+}
+
 void sendTriggerToSlave() {
   uint8_t triggerData[1] = {0x01}; // Command to start recording
   
@@ -382,8 +433,8 @@ void loop() {
   float accelMagnitude = sqrt(linearAccel.x()*linearAccel.x() + linearAccel.y()*linearAccel.y() + linearAccel.z()*linearAccel.z());
   currentAccel = accelMagnitude;
 
-  // Calculate X-axis rotation speed (wrist pronation)
-  float currentXrotationSpeed = angularVel.x();
+  // Calculate maximum rotation speed from all axes (wrist pronation)
+  float currentXrotationSpeed = max(max(abs(angularVel.x()), abs(angularVel.y())), abs(angularVel.z()));
   if (currentXrotationSpeed > fastestXrotationSpeed) {
     fastestXrotationSpeed = currentXrotationSpeed;
   }
@@ -399,7 +450,13 @@ void loop() {
     Serial.print("Speed (mph): "); Serial.println(maxSpeed_mph);
   }
 
-  Serial.print("maxSpeed_mph: ");  Serial.println(maxSpeed_mph);
+  //Serial.print("maxSpeed_mph: ");  Serial.println(maxSpeed_mph);
+  
+  // Debug BLE connection status
+  if (deviceConnected != oldDeviceConnected) {
+    Serial.print("BLE Connection status changed: ");
+    Serial.println(deviceConnected ? "Connected" : "Disconnected");
+  }
 
   // Only record data if recording is active
   if (recordingActive && head < bufferSize) {
@@ -467,5 +524,16 @@ void loop() {
   // connecting
   if (deviceConnected && !oldDeviceConnected) {
       oldDeviceConnected = deviceConnected;
+  }
+  
+  // Reset BLE if no connection for a while
+  static unsigned long lastCheck = 0;
+  if (millis() - lastCheck > 5000) {  // Every 5 seconds
+    lastCheck = millis();
+    if (!deviceConnected) {
+      BLEDevice::stopAdvertising();
+      BLEDevice::startAdvertising();
+      Serial.println("Restarting BLE advertising...");
+    }
   }
 }

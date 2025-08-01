@@ -7,16 +7,18 @@ import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import color from "./colors";
+import CalibrateModal from "./components/calibrateModal";
 import { PostServe } from "./components/postServe";
 import SaveSessionModal from "./components/SaveSessionModal";
 import StatGrid from "./components/stat_grid";
 import { StatTotals } from "./components/stat_totals";
-import { getCurrentGridScores, processLiveData } from './data/liveDataProcessing';
+import { getCurrentGridScores, processLiveData, resetData } from './data/liveDataProcessing';
 import spacing from "./spacing";
   
 
 export default function AboutScreen() {
   const [isSaveModalVisible, setIsSaveModalVisible] = useState(false);
+  const [isCalibrateModalVisible, setIsCalibrateModalVisible] = useState(true);
   const [swingData, setSwingData] = useState<any[]>([]);
 
   useEffect(() => {
@@ -88,7 +90,7 @@ export default function AboutScreen() {
     sliderValue: 0.5
   };
   const contactPronationData = swingData[4] || {
-    title: 'Contact Wrist Pronation',
+    title: 'Contact Pronation',
     value: '0°',
     delta: '0°',
     avg: '0°',
@@ -122,6 +124,7 @@ export default function AboutScreen() {
   };
 
   const handleDiscardSession = () => {
+    resetData();
     // TODO: Implement discard session logic
     console.log("Discarding session...");
     setIsSaveModalVisible(false);
@@ -177,6 +180,11 @@ export default function AboutScreen() {
           onSave={handleSaveSession}
           onDiscard={handleDiscardSession}
           onCancel={handleCancelSave}
+        />
+
+        <CalibrateModal
+          visible={isCalibrateModalVisible}
+          onCancel={() => setIsCalibrateModalVisible(false)}
         />
     </View>
   );

@@ -51,6 +51,10 @@ esp_now_peer_info_t peerInfo;
 imu::Quaternion currentSlaveQuaternion;
 imu::Quaternion currentMasterQuaternion;  
 float currentPronation;
+float pronationDeg; // Raw pronation value (available globally)
+
+// changes based on ping
+float calibrationOffset = 0;
 
 
 
@@ -88,10 +92,18 @@ void OnDataRecv(const esp_now_recv_info *info, const uint8_t *incomingData, int 
     sendData(swingId, pointsToSend);
   }
   else if (command == 0x03 && len >= 17) {
-    Serial.println("Received quaternion data from master");
+    //Serial.println("Received quaternion data from master");
     processQuaternionData(incomingData);
   }
+  else if (command == 0x04) {
+    Serial.println("Received ping from master");
+    calibrationOffset = fabsf(pronationDeg);
+    Serial.print("Calibration offset set to: ");
+    Serial.println(calibrationOffset);
+  }
 }
+
+
 
 void processQuaternionData(const uint8_t* data) {
   // Extract quaternion values from the received data
@@ -139,7 +151,7 @@ void calculateCurrentPronation() {
   float rollRad   = atan2f(sinr_cosp, cosr_cosp);
 
   // 5. Convert to degrees
-  float pronationDeg = rollRad * 180.0f / M_PI;
+  pronationDeg = rollRad * 180.0f / M_PI;
 
   // 6. Optional dead-band to kill tiny noise around zero
   const float deadbandDeg = 1.0f;  
@@ -147,7 +159,7 @@ void calculateCurrentPronation() {
       pronationDeg = 0.0f;
 
   // 7. Store result
-  currentPronation = fabsf(pronationDeg);
+  currentPronation = fabsf(pronationDeg - calibrationOffset);
   pronationBuffer[head] = currentPronation;
 
   Serial.print("Current pronation: ");

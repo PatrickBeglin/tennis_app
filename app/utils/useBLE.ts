@@ -31,6 +31,7 @@ interface BluetoothLowEnergyApi {
     isConnecting: boolean;
     maxConnections: number;
     sensorData: {[deviceId: string]: any};
+    sendPingToMaster: (data: string) => Promise<void>;
 }
 
 
@@ -148,7 +149,7 @@ function useBLE(): BluetoothLowEnergyApi {
             return true;
         }
         
-    }
+    };
 
 /* return true if the device is already in the list */
     const isDuplicateDevice = (devices: Device[], device: Device) =>
@@ -174,11 +175,11 @@ function useBLE(): BluetoothLowEnergyApi {
                 }
             }
         });
-    }
+    };
 
     const stopDeviceScan = () => {
             bleManager.stopDeviceScan();
-    }
+    };
 
     const connectToDevice = async (device: Device) => {
         // Check if we're already at max connections
@@ -218,7 +219,12 @@ function useBLE(): BluetoothLowEnergyApi {
                 console.log("Failed to increase MTU:", e);
             }
             
-            setConnectedDevices(prev => [...prev, connected]);
+            setConnectedDevices(prev => {
+                const newList = [...prev, connected];
+                console.log(`Device added to connectedDevices. New count: ${newList.length}`);
+                console.log("Connected devices:", newList.map(d => ({ name: d.name, id: d.id })));
+                return newList;
+            });
             console.log(`Total connections: ${connectedDevices.length + 1}/${maxConnections}`);
 
             startStreamingData(connected);
@@ -335,10 +341,7 @@ function useBLE(): BluetoothLowEnergyApi {
             console.log("Error processing data:", e);
             console.log("Raw data that failed to parse:", rawData);
         }
-    } 
-
-
-    
+    } ;
 
 
     const processBinaryData = (buffer: Buffer) => { // buffer will be rawdata
@@ -404,9 +407,7 @@ function useBLE(): BluetoothLowEnergyApi {
                 swing: swingData,
             }
         }  
-    }
-
-
+    };
 
     const startStreamingData = async (device: Device) => {
         if (device) {
@@ -441,6 +442,84 @@ function useBLE(): BluetoothLowEnergyApi {
         }
     };
 
+    const sendPingToMaster = async (data: string) => {
+        console.log("=== sendPingToMaster Debug ===");
+        console.log("Connected devices count:", connectedDevices.length);
+        console.log("All connected devices:", connectedDevices.map(d => ({ name: d.name, id: d.id })));
+        
+        console.log("Searching for devices with specific IDs...");
+        const masterDevice = connectedDevices.find(device => {
+            const found = device.id.includes("E8:6B:EA:2F:E8:0A");
+            console.log(`Checking device ${device.name} (${device.id}) for master: ${found}`);
+            return found;
+        });
+        const slaveDevice = connectedDevices.find(device => {
+            const found = device.id.includes("E8:6B:EA:2F:E8:4A");
+            console.log(`Checking device ${device.name} (${device.id}) for slave: ${found}`);
+            return found;
+        });
+        
+        console.log("Looking for master device with ID containing: E8:6B:EA:2F:E8:0A");
+        console.log("Looking for slave device with ID containing: E8:6B:EA:2F:E8:4A");
+        
+        if (masterDevice) {
+            console.log("✅ Found master device:", masterDevice.name, "ID:", masterDevice.id);
+        } else {
+            console.log("❌ Master device not found");
+        }
+        
+        if (slaveDevice) {
+            console.log("✅ Found slave device:", slaveDevice.name, "ID:", slaveDevice.id);
+        } else {
+            console.log("❌ Slave device not found");
+        }
+        // Try to send to both master and slave devices
+        let pingSent = false;
+        
+        // Send to master device if found
+        if (masterDevice) {
+            try {
+                console.log("Sending ping to master device:", masterDevice.name);
+                const discoveredDevice = await masterDevice.discoverAllServicesAndCharacteristics();
+                
+                await discoveredDevice.writeCharacteristicWithResponseForService(
+                    SERVICE_UUID,
+                    MASTER_CHARACTERISTIC_UUID,
+                    data
+                );
+                console.log("✅ Ping sent to master successfully");
+                pingSent = true;
+            } catch (error) {
+                console.log("❌ Failed to send ping to master:", error);
+            }
+        }
+        
+        // Send to slave device if found
+        if (slaveDevice) {
+            try {
+                console.log("Sending ping to slave device:", slaveDevice.name);
+                const discoveredDevice = await slaveDevice.discoverAllServicesAndCharacteristics();
+                
+                await discoveredDevice.writeCharacteristicWithResponseForService(
+                    SERVICE_UUID,
+                    SLAVE_CHARACTERISTIC_UUID,
+                    data
+                );
+                console.log("✅ Ping sent to slave successfully");
+                pingSent = true;
+            } catch (error) {
+                console.log("❌ Failed to send ping to slave:", error);
+            }
+        }
+        
+        if (!pingSent) {
+            console.log("❌ Failed to send ping to any device");
+            throw new Error("No devices available for ping");
+        }
+        
+        console.log("✅ Ping sent to at least one device successfully");
+    };
+
 
     return {
         scanForPeripherals,
@@ -454,6 +533,7 @@ function useBLE(): BluetoothLowEnergyApi {
         isConnecting,
         maxConnections,
         sensorData,
+        sendPingToMaster,
     }
 }
 
