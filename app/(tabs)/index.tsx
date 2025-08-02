@@ -13,7 +13,7 @@ import { StatTotals } from "../components/stat_totals";
 import { serveData } from "../data/serve_scores";
 
 import { Alert } from "react-native";
-import useBLE from "../utils/useBLE";
+import { useGlobalBLE } from "../utils/useBLE";
 
 // Import to trigger liveDataProcessing execution
 import "../data/liveDataProcessing";
@@ -26,7 +26,7 @@ const router = useRouter();
 
 export default function Index() {
   
-  const { requestPermissions, scanForPeripherals, allDevices, stopDeviceScan, connectToDevice, disconnectFromDevice, disconnectAllDevices, connectedDevices, isConnecting, maxConnections } = useBLE();
+  const { requestPermissions, scanForPeripherals, allDevices, stopDeviceScan, connectToDevice, disconnectFromDevice, disconnectAllDevices, connectedDevices, isConnecting, maxConnections } = useGlobalBLE();
   const [isModalVisible, setModalVisible] = useState<boolean>(false);
 
   // Debug logging for connectedDevices changes

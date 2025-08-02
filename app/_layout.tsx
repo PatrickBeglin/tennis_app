@@ -1,6 +1,7 @@
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import { Text, View } from 'react-native';
+import { BLEProvider } from './utils/useBLE';
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
@@ -22,20 +23,22 @@ export default function RootLayout() {
   }
 
   return (
-    <Stack>
-      <Stack.Screen
-        name="(tabs)"
-        options={{
-          headerShown: false,
-          headerTitle: 'Home',
-        }}
-      />
-      <Stack.Screen
-        name="serveMode"
-        options={{
-          headerShown: false,
-        }}
-      />
-    </Stack>
+    <BLEProvider>
+      <Stack>
+        <Stack.Screen
+          name="(tabs)"
+          options={{
+            headerShown: false,
+            headerTitle: 'Home',
+          }}
+        />
+        <Stack.Screen
+          name="serveMode"
+          options={{
+            headerShown: false,
+          }}
+        />
+      </Stack>
+    </BLEProvider>
   );
 }

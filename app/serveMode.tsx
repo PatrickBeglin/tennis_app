@@ -14,12 +14,15 @@ import StatGrid from "./components/stat_grid";
 import { StatTotals } from "./components/stat_totals";
 import { getCurrentGridScores, processLiveData, resetData } from './data/liveDataProcessing';
 import spacing from "./spacing";
-  
+import { useGlobalBLE } from "./utils/useBLE";
 
 export default function AboutScreen() {
   const [isSaveModalVisible, setIsSaveModalVisible] = useState(false);
   const [isCalibrateModalVisible, setIsCalibrateModalVisible] = useState(true);
   const [swingData, setSwingData] = useState<any[]>([]);
+  
+  // Use the global BLE context
+  const { sendPingToMaster } = useGlobalBLE();
 
   useEffect(() => {
     const interval = setInterval(() => {

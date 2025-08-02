@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import color from '../colors';
 import spacing from '../spacing';
-import useBLE from "../utils/useBLE";
+import { useGlobalBLE } from '../utils/useBLE';
 
 interface CalibrateModalProps {
   visible: boolean;
@@ -15,8 +15,8 @@ export default function CalibrateModal({
   visible,
   onCancel,
 }: CalibrateModalProps) {
-  const { sendPingToMaster } = useBLE();
   const [isSuccess, setIsSuccess] = useState(false);
+  const { sendPingToMaster } = useGlobalBLE();
   
   const onCalibrate = async () => {
     console.log("Calibrate button pressed!");
