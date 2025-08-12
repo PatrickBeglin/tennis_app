@@ -9,7 +9,7 @@ import { ShowAllCard } from "../components/showAll";
 import StatGrid from "../components/stat_grid";
 import { AVERAGE_SCORES } from "../data/averageScores";
 import { GRID_AVERAGE_SCORES } from "../data/gridAverageScores";
-import { MONTHLY_SCORES } from "../data/monthly_scores";
+import { MONTHLY_SCORES } from "../data/monthlyScores";
 import spacing from "../spacing";
 
 
