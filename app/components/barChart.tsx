@@ -1,3 +1,4 @@
+// file creating a bar chart component from gifted charts
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { BarChart as GiftedBarChart } from 'react-native-gifted-charts';
@@ -17,7 +18,6 @@ interface BarChartProps {
 }
 
 const BarChart: React.FC<BarChartProps> = ({ data, title = '', score = '', colour }) => {
-  // Transform data for Gifted Charts
   const chartData = data.map(d => ({ value: d.value, label: d.month }));
 
   return (

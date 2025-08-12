@@ -3,12 +3,12 @@ import { router, useLocalSearchParams } from "expo-router";
 import React from "react";
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import color from "../colors";
-import BarChart from "../components/bar_chart";
-import ScoreRings from "../components/score_rings";
+import BarChart from "../components/barChart";
+import ScoreRings from "../components/scoreRings";
 import { ShowAllCard } from "../components/showAll";
 import StatGrid from "../components/stat_grid";
-import { AVERAGE_SCORES } from "../data/average_scores";
-import { GRID_AVERAGE_SCORES } from "../data/grid_average_scores";
+import { AVERAGE_SCORES } from "../data/averageScores";
+import { GRID_AVERAGE_SCORES } from "../data/gridAverageScores";
 import { MONTHLY_SCORES } from "../data/monthly_scores";
 import spacing from "../spacing";
 
@@ -33,8 +33,6 @@ export default function SummaryScreen() {
 
   const barTitle = selectedMode === "overall" ? "Average Monthly Overall Score" : selectedMode === "serve" ? "Average Monthly Serve Score" : selectedMode === "forehand" ? "Average Monthly Forehand Score" : "Average Monthly Backhand Score";
   const barColour = selectedMode === "overall" ? color.purple : selectedMode === "serve" ? color.blue : selectedMode === "forehand" ? color.teal : selectedMode === "backhand" ? color.yellow : color.purple;
-  // TODO: Use selectedMode to filter/update all data shown on the page
-  // Eg: if (selectedMode === 'overall') { /* show overall stats */ }
 
   return (
       <View style={styles.screen}>
@@ -73,10 +71,7 @@ export default function SummaryScreen() {
   );
 }
 
-
-
 const styles = StyleSheet.create({
-  
   header: {
     width: '100%',
     paddingHorizontal: 28,
@@ -97,68 +92,49 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexDirection: 'row',
   },
-
   backButtonIcon: {
     fontSize: 24,
     color: "white",
     marginRight: 6,
   },
-
   backButtonText: {
     fontFamily: 'Inter-Regular',
     fontSize: 14,
     color: "white",
   },
-
   title: {
     fontFamily: 'Inter-Bold',
     fontSize: 24,
     color: "white",
     textAlign: 'center',
   },
-
-
-
   screen: {
     flex: 1,
     backgroundColor: "black",
   },
-
   scroll: {
     flex: 1,
     backgroundColor: "black",
   },
-
   container: {
     paddingHorizontal: 28,
     paddingBottom: spacing.m,
   },
-
-
-  text: {
-    color: "red",
-    fontSize: 24,
-    fontWeight: "bold"
-  },
-
   doubleTitle: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'baseline'
   },
-
   showMore: {
     fontSize: 14,
     color: color.accentText,
   },
-
   sectionTitle: {
     color: "white",
     fontSize: 20,
     fontFamily: 'Inter-Bold',
     marginBottom: spacing.m,
   },
-
   sectionTitleMini: {
     color: "white",
     fontSize: 14,

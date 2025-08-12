@@ -1,11 +1,10 @@
+// PostServe: Gauge bar component shown during serve mode
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import color from "../colors";
 import spacing from "../spacing";
-
-
 
 type PostServeProps = {
     type: string;
@@ -27,7 +26,6 @@ export function PostServe({ type, data, expanded, onToggle }: PostServeProps) {
         return color.accentText;
       }
 
-
     return (
         <View>
           {collapsedMode ? (
@@ -42,13 +40,9 @@ export function PostServe({ type, data, expanded, onToggle }: PostServeProps) {
                         </View>
                     </View>
                     <Text style={styles.value}>{data.value}</Text>
-                    
                 </View>
-
-
                 <View style={styles.sliderRow}>
                     <View style={styles.sliderTrackWrapper}>
-                        
                         <LinearGradient
                         colors={[color.accentGrey,  color.purple, color.purple, color.accentGrey]}
                         locations={data.sliderGradient}
@@ -66,7 +60,6 @@ export function PostServe({ type, data, expanded, onToggle }: PostServeProps) {
                         />
                     </View>
                     </View>
-
                     <View style={styles.sliderLabelRow}>
                         <Text style={styles.sliderLabel}>{data.label[0]}</Text>
                         <Text style={styles.sliderLabel}>{data.label[1]}</Text>
@@ -80,12 +73,6 @@ export function PostServe({ type, data, expanded, onToggle }: PostServeProps) {
                     </TouchableOpacity>
             </View>
             </>
-
-
-
-
-
-
           ) : (
             <>
 <View style={styles.card}>
@@ -97,14 +84,10 @@ export function PostServe({ type, data, expanded, onToggle }: PostServeProps) {
                             <Text style={styles.circleText}>{data.status}</Text>
                         </View>
                     </View>
-                    <Text style={styles.value}>{data.value}</Text>
-                    
+                    <Text style={styles.value}>{data.value}</Text>    
                 </View>
-
-
                 <View style={styles.sliderRow}>
-                    <View style={styles.sliderTrackWrapper}>
-                        
+                    <View style={styles.sliderTrackWrapper}>    
                         <LinearGradient
                         colors={[color.accentGrey,  color.purple, color.purple, color.accentGrey]}
                         locations={data.sliderGradient}
@@ -127,7 +110,6 @@ export function PostServe({ type, data, expanded, onToggle }: PostServeProps) {
                         <Text style={styles.sliderLabel}>{data.label[0]}</Text>
                         <Text style={styles.sliderLabel}>{data.label[1]}</Text>
                     </View>
-
                     <View style={styles.proRangeContainer}>
                         <View style={styles.proRangeContainer2}>
                             <Text style={styles.proRangeText}>Pro Range: </Text>
@@ -138,10 +120,6 @@ export function PostServe({ type, data, expanded, onToggle }: PostServeProps) {
                             <Text style={styles.deltaText2}> From last Serve</Text>
                         </View>
                     </View>
-
-
-
-
                     <View style={styles.expandedContainer}>
                         <View style={styles.expandedTextContainer1}>
                             <Text style={styles.expandedText}>Avg: </Text>
@@ -151,21 +129,18 @@ export function PostServe({ type, data, expanded, onToggle }: PostServeProps) {
                         </View>
                             <Text style={styles.expandedText2}>Score: {data.score}</Text>
                     </View>
-
                     <View style={styles.tipContainer}>
                         <Text style={styles.tipText}>
                             <Text style={styles.tipTitle}>Tip: </Text>
                             {data.tip}
                         </Text>
                     </View>
-                    
                     <TouchableOpacity onPress={() => setCollapsedMode(!collapsedMode)}>
                     <View style={styles.collapseContainer}>
                         <Text style={styles.detailsText}>Collapse</Text>
                         <Ionicons name="chevron-up" size={14} color={color.accentText} />
                     </View>
                     </TouchableOpacity>
-
             </View>
             </>
           )}
@@ -198,7 +173,6 @@ const styles = StyleSheet.create({
         color: "white",
         fontSize: 16,
         fontFamily: "Inter-Regular",
-
     },
     label: {
         fontSize: 12,
@@ -261,7 +235,6 @@ const styles = StyleSheet.create({
         backgroundColor: 'white',
         borderRadius: 5,
         top: -7, // centers the thumb vertically
-        // left is set dynamically
         zIndex: 2,
         borderWidth: 0.5,
         borderColor: "black",
@@ -281,7 +254,6 @@ const styles = StyleSheet.create({
         fontSize: 24,
         fontFamily: "Inter-Medium",
     },
-
     deltaContainer: {
         flexDirection: 'row',
         alignItems: 'flex-end',
@@ -307,7 +279,6 @@ const styles = StyleSheet.create({
         fontSize: 12,
         marginRight: spacing.s,
     },
-
     expandedContainer: {
         marginTop: spacing.m,
         flexDirection: 'row',

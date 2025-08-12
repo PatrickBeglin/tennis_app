@@ -1,3 +1,4 @@
+// grid_average_scores: mock data file for grid scores used on summary and serve mode pages
 export interface GridScore {
     key: 'wrist_pronation' | 'torso_rotation' | 'shot_timing' | 'swing_speed'
     label: string

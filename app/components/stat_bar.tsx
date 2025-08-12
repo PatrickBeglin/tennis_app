@@ -1,41 +1,64 @@
-import { LinearGradient, LinearGradientProps } from 'expo-linear-gradient';
+import { LinearGradient } from 'expo-linear-gradient';
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import color from '../colors';
-import type { ServeMetric } from '../data/serve_scores';
+import type { ServeMetric } from '../data/serveScores';
 import spacing from '../spacing';
 
 type Props = {
   metricObj: ServeMetric
-  gradientColors?: LinearGradientProps['colors']
 }
 
 export default function StatBar({
   metricObj: {
     name,
-    metric: { valuePercent, status },
+    metric: { valuePercent, status, statusColor, sliderGradient },
   },
-  gradientColors = [
-    '#e74c3c',
-    '#f1c40f',
-    '#2ecc71',
-    '#f1c40f',
-    '#e74c3c',
-  ],
 }: Props) {
+  // Calculate thumb position based on status
+  const getThumbPosition = (): number => {
+    switch (status) {
+      case "Poor":
+        return 0;
+      case "Ok":
+        return 25;
+      case "Good":
+        return 50;
+      case "Excellent":
+        return 75;
+      case "Perfect":
+        return 100;
+      case "Sub Optimal":
+        return 25;
+      case "Late":
+        return 75;
+      default:
+        return valuePercent * 100;
+    }
+  };
+
   return (
     <View style={styles.container}>
       {/* Text row on top */}
       <View style={styles.textRow}>
         <Text style={styles.label}>{name}</Text>
-        <Text style={styles.rating}>{status}</Text>
+        <View style={styles.statusContainer}>
+          <View style={[styles.statusBall, { backgroundColor: statusColor }]} />
+          <Text style={styles.rating}>{status}</Text>
+        </View>
       </View>
 
       {/* Gradient bar below */}
       <View style={styles.barWrapper}>
         <View style={styles.gradientMask}>
           <LinearGradient
-            colors={gradientColors}
+            colors={[
+              color.accentGrey,  // #656565
+              color.purple,      // #D293FF
+              color.purple,      // #D293FF
+              color.accentGrey,  // #656565
+            ]}
+            locations={sliderGradient as [number, number, number, number]}
             start={[0, 0]}
             end={[1, 0]}
             style={styles.bar}
@@ -44,7 +67,7 @@ export default function StatBar({
         <View
           style={[
             styles.thumb,
-            { left: `${valuePercent * 100}%` },
+            { left: `${getThumbPosition()}%` },
           ]}
         />
       </View>
@@ -68,6 +91,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'Inter-Regular',
 
+  },
+  statusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statusBall: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 8,
   },
   rating: {
     color: color.accentText,  

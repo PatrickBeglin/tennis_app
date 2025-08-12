@@ -1,12 +1,15 @@
-console.log("LIVE DATA PROCESSING FILE LOADED!");
+/**
+ * Live Data Processing Module
+ * 
+ * Processes wrist pronation, swing speed, contact angles, and generates
+ * performance scores and feedback for live tennis sessions.
+ */
 
 import { globalSensorData } from "../utils/useBLE";
 
 // Check for data updates every 2 seconds
 setInterval(() => {
-    // Only log if there's actual data
     if (Object.keys(globalSensorData).length > 0) {
-        //console.log("LIVE DATA PROCESSING Current global sensor data:", globalSensorData);
     }
 }, 2000);
 
@@ -56,7 +59,6 @@ let colorExcellent = "#00FF36";
 let pronationSpeedScoresArray: number[] = [];
 let contactTimingScoresArray: number[] = [];
 
-// Session state flag
 let sessionStarted = false;
 
 // ------------------------------------------------------- CORE DATA PROCESSING FUNCTIONS -------------------------------------------------------
@@ -97,17 +99,15 @@ const updateTotalAvgScore = () => {
 
 // ------------------------------------------------------- WRIST PRONATION FUNCTIONS -------------------------------------------------------
 
+// Helper function to calculate max wrist pronation
 const calculateMaxWristPronation = (MasterData: any, SlaveData: any, dataLength: number): number => {
     let maxPronation = 0;
-
-    // Just find the highest pronation value from slave data (already scaled in useBLE)
     for (let i = 0; i < dataLength; i++) {
-        const pronationValue = SlaveData.swing[i]; // This is already the pronation value in degrees
+        const pronationValue = SlaveData.swing[i];
         if (pronationValue > maxPronation) {
             maxPronation = pronationValue;
         }
     }
-
     console.log("Max wrist pronation from slave:", maxPronation);
     return maxPronation;
 };
@@ -137,19 +137,15 @@ const calculateRotationScore = (maxYRotationDifference: number): number => {
     
     // Calculate distance from optimal range
     let distanceFromOptimal: number;
-    
     if (maxYRotationDifference < optimalMin) {
-        // Below optimal range - distance from 80
         distanceFromOptimal = optimalMin - maxYRotationDifference;
     } else {
-        // Above optimal range - distance from 100
         distanceFromOptimal = maxYRotationDifference - optimalMax;
     }
     
     // Calculate score: 100 - (distance * penalty factor)
     const penaltyFactor = 100 / Math.max(optimalMin - rangeMin, rangeMax - optimalMax);
     const score = Math.max(0, 100 - (distanceFromOptimal * penaltyFactor));
-    
     return Math.round(score);
 };
 
@@ -170,8 +166,6 @@ const calculateDelta = (maxYRotationDifference: number): string => {
         }
         return lastMeaningfulDelta;
     }
-    
-    // Return the last meaningful delta if no new swing
     return lastMeaningfulDelta;
 };
 
@@ -228,7 +222,7 @@ const calculateSpeedDelta = (swingSpeed: number): string => {
         lastSwingSpeed = swingSpeedScores[swingSpeedScores.length - 1];
     }
     
-    // Only show delta if this is a new swing (different from last)
+    // Only show delta if this is a new swing
     if (swingSpeedScores.length === 0 || swingSpeed !== lastSwingSpeed) {
         let delta = swingSpeed - lastSwingSpeed;
         if (delta > 0) {
@@ -238,14 +232,11 @@ const calculateSpeedDelta = (swingSpeed: number): string => {
         }
         return lastMeaningfulSpeedDelta;
     }
-    
-    // Return the last meaningful delta if no new swing
     return lastMeaningfulSpeedDelta;
 };
 
 // Helper function to update swing speed averages
 const updateSpeedAverages = (swingSpeed: number) => {
-    // Only add new score if it's different from the last one (indicating a new swing)
     if (swingSpeedScores.length === 0 || swingSpeed !== swingSpeedScores[swingSpeedScores.length - 1]) {
         swingSpeedScores.push(swingSpeed);
         
@@ -265,46 +256,51 @@ const updateSpeedAverages = (swingSpeed: number) => {
     }
 };
 
+// Helper function to calculate swing slider value
 const calculateSwingSliderValue = (swingSpeed: number): number => {
     return swingSpeed / 120;
 };
 
+// Helper function to calculate swing score
 const calculateSwingScore = (swingSpeed: number): number => {
-    let swingScore = Math.round((swingSpeed / 120) * 100);
+    let swingScore = Math.round((swingSpeed / 85) * 100);
     swingScoresArray.push(swingScore);
     return swingScore;
 };
 
+// Helper function to calculate swing status
 const calculateSwingStatus = (swingSpeed: number): string => {
     if (swingSpeed < 30) {
         return 'Poor';
     } else if (swingSpeed < 50) {
         return 'Ok';
-    } else if (swingSpeed < 80) {
+    } else if (swingSpeed < 85) {
         return 'Good';
     } else {
         return 'Excellent';
     }
 };
 
+// Helper function to calculate swing status color
 const calculateSwingStatusColor = (swingSpeed: number): string => {
     if (swingSpeed < 30) {
         return colorPoor;
     } else if (swingSpeed < 50) {
         return colorOk;
-    } else if (swingSpeed < 80) {
+    } else if (swingSpeed < 85) {
         return colorGood;
     } else {
         return colorExcellent;
     }
 };
 
+// Helper function to get swing speed tip
 const getSwingSpeedTip = (swingSpeed: number): string => {
     if (swingSpeed < 30) {
         return "Focus on generating more power through your legs and core rotation.";
     } else if (swingSpeed < 50) {
         return "Work on your timing and follow-through to increase swing speed.";
-    } else if (swingSpeed < 80) {
+    } else if (swingSpeed < 85) {
         return "Good speed! Focus on consistency and accuracy.";
     } else {
         return "Excellent speed! Maintain this level while working on precision.";
@@ -313,29 +309,31 @@ const getSwingSpeedTip = (swingSpeed: number): string => {
 
 // ------------------------------------------------------- PRONATION SPEED FUNCTIONS -------------------------------------------------------
 
+// Helper function to get pronation speed
 const getPronationSpeed = (MasterData: any): string => {
-    let currentPronationSpeed = MasterData.pronation_speed || 0; // Get from master, not slave
+    let currentPronationSpeed = MasterData.pronation_speed || 0;
     console.log("Pronation speed:", currentPronationSpeed);
     return String(Math.round(currentPronationSpeed)) + "°/s";
 };
 
+// Helper function to update pronation speed averages
 const updatePronationSpeedAverages = (newPronationSpeed: number) => {
-    // Only add new score if it's different from the last one (indicating a new swing)
     if (pronationSpeedArray.length === 0 || newPronationSpeed !== pronationSpeedArray[pronationSpeedArray.length - 1]) {
         pronationSpeedArray.push(newPronationSpeed);
         
-        // Update best pronation speed
         if (newPronationSpeed > bestPronationSpeed) {
             bestPronationSpeed = newPronationSpeed;
         }
     }
 };
 
+// Helper function to get pronation speed average
 const getPronationSpeedAverage = (): string => {    
     let total = pronationSpeedArray.length > 0 ? pronationSpeedArray.reduce((a, b) => a + b, 0) / pronationSpeedArray.length : 0;
     return String(Math.round(total)) + "°/s";
 }
 
+// Helper function to get pronation speed delta
 const getPronationSpeedDelta = (currentPronationSpeed: number): string => {
     let lastPronationSpeed = 0;
     if (pronationSpeedArray.length > 0) {   
@@ -350,11 +348,13 @@ const getPronationSpeedDelta = (currentPronationSpeed: number): string => {
     return lastMeaningfulPronationSpeedDelta;
 }
 
+// Helper function to get pronation speed score
 const getPronationSpeedScore = (currentPronationSpeed: number): string => {
     let pronationSpeedScore = Math.round((currentPronationSpeed / 1500) * 100);
     return String(pronationSpeedScore);
 }
 
+// Helper function to get pronation speed status
 const getPronationSpeedStatus = (currentPronationSpeed: number): string => {
     if (currentPronationSpeed < 500) {
         return "Poor";
@@ -367,6 +367,7 @@ const getPronationSpeedStatus = (currentPronationSpeed: number): string => {
     }
 }
 
+// Helper function to get pronation speed status color
 const getPronationSpeedStatusColor = (currentPronationSpeed: number): string => {
     if (currentPronationSpeed < 500) {
         return colorPoor;
@@ -379,6 +380,7 @@ const getPronationSpeedStatusColor = (currentPronationSpeed: number): string => 
     }
 }
 
+// Helper function to get pronation speed tip
 const getPronationSpeedTip = (currentPronationSpeed: number): string => {
     if (currentPronationSpeed < 500) {
         return "Focus on generating more power through your legs and core rotation.";
@@ -391,25 +393,27 @@ const getPronationSpeedTip = (currentPronationSpeed: number): string => {
     }
 }
 
+// Helper function to get pronation speed slider value
 const getPronationSpeedSliderValue = (currentPronationSpeed: number): number => {
     return (currentPronationSpeed / 2000);
 }
 
 // ------------------------------------------------------- CONTACT ANGLE (EULER Y) FUNCTIONS -------------------------------------------------------
 
+// Helper function to get contact YEuler
 const getContactYEuler = (MasterData: any): string => {
-    currentContactYEuler = MasterData.impact_euler_y || 0; // Get from master, not slave
+    currentContactYEuler = MasterData.impact_euler_y || 0;
     return String(Math.round(currentContactYEuler)) + "°";
 }
 
-// Helper function to update contact YEuler averages (only on new swings)
+// Helper function to update contact YEuler averages on new swings
 const updateContactYEulerAverages = (eulerValue: number) => {
-    // Only add new value if it's different from the last one (indicating a new swing)
     if (yEulerScoresArray.length === 0 || eulerValue !== yEulerScoresArray[yEulerScoresArray.length - 1]) {
         yEulerScoresArray.push(eulerValue);
     }
 }
 
+// Helper function to get contact YEuler delta
 const getYEulerDelta = (): string => {
     let lastMeaningfulYEulerDelta = "0°";
     if (yEulerScoresArray.length > 0) {
@@ -426,18 +430,21 @@ const getYEulerDelta = (): string => {
     return lastMeaningfulYEulerDelta;
 }
 
+// Helper function to get contact YEuler average
 const getYEulerAverage = (): string => {
     let average = yEulerScoresArray.length > 0 ? yEulerScoresArray.reduce((a, b) => a + b, 0) / yEulerScoresArray.length : 0;
     return String(Math.round(average)) + "°";
 }
 
+// Helper function to get contact YEuler best
 const getYEulerBest = (): string => {
-    // Filter values <= 60, then find the maximum of those
-    let validValues = yEulerScoresArray.filter(value => value <= 60);
+    // Filter for values within optimal range (60-75°)
+    let validValues = yEulerScoresArray.filter(value => value >= 60 && value <= 75);
     let best = validValues.length > 0 ? Math.max(...validValues) : 0;
     return String(Math.round(best)) + "°";
 }
 
+// Helper function to calculate Euler score
 const calculateEulerScore = (eulerValue: number): number => {
     const optimalMin = 60;
     const optimalMax = 75;
@@ -468,6 +475,7 @@ const calculateEulerScore = (eulerValue: number): number => {
     return Math.round(score);
 };
 
+// Helper function to get Euler status
 const getEulerStatus = (eulerValue: number): string => {
     if (eulerValue < 20 || eulerValue > 110) {
         return "Poor";
@@ -480,6 +488,7 @@ const getEulerStatus = (eulerValue: number): string => {
     }
 }
 
+// Helper function to get Euler tip
 const getEulerTip = (eulerValue: number): string => {
     if (eulerValue < 20) {
         return "Try and Throw the ball higher and hit the ball earlier";
@@ -498,6 +507,7 @@ const getEulerTip = (eulerValue: number): string => {
     }
 }
 
+// Helper function to get Euler status color
 const getEulerStatusColor = (eulerValue: number): string => {
     if (eulerValue < 20 || eulerValue > 110) {
         return colorPoor;
@@ -510,28 +520,28 @@ const getEulerStatusColor = (eulerValue: number): string => {
     }
 }   
 
+// Helper function to get Euler slider value
 const getEulerSliderValue = (eulerValue: number): number => {
     return eulerValue / 120;
 }
 
 // ------------------------------------------------------- CONTACT PRONATION FUNCTIONS -------------------------------------------------------
 
+// Helper function to get contact pronation
 const getContactPronation = (MasterData: any, SlaveData: any): string => {
     currentContactPronation = SlaveData.swing[MasterData.impact_index] || 0; // Get from slave
     return String(Math.round(currentContactPronation)) + "°";
 }
 
-// Helper function to update contact pronation averages (only on new swings)
+// Helper function to update contact pronation averages 
 const updateContactPronationAverages = (pronationValue: number) => {
-    // Only add new value if it's different from the last one (indicating a new swing)
     if (contactPronationArray.length === 0 || pronationValue !== contactPronationArray[contactPronationArray.length - 1]) {
         contactPronationArray.push(pronationValue);
     }
 }
 
-// Helper function to update pronation speed scores (only on new swings)
+// Helper function to update pronation speed scores
 const updatePronationSpeedScores = (currentPronationSpeed: number) => {
-    // Only add new score if it's different from the last one (indicating a new swing)
     if (pronationSpeedScoresArray.length === 0 || currentPronationSpeed !== pronationSpeedArray[pronationSpeedArray.length - 1]) {
         let pronationSpeedScore = Math.round((currentPronationSpeed / 1500) * 100);
         if (pronationSpeedScore > 100) pronationSpeedScore = 100;
@@ -542,7 +552,6 @@ const updatePronationSpeedScores = (currentPronationSpeed: number) => {
 
 // Helper function to update contact timing scores (only on new swings)
 const updateContactTimingScores = (eulerValue: number, pronationValue: number) => {
-    // Only add new scores if it's different from the last one (indicating a new swing)
     if (contactTimingScoresArray.length === 0 || 
         eulerValue !== yEulerScoresArray[yEulerScoresArray.length - 1] || 
         pronationValue !== contactPronationArray[contactPronationArray.length - 1]) {
@@ -557,6 +566,7 @@ const updateContactTimingScores = (eulerValue: number, pronationValue: number) =
     }
 }
 
+// Helper function to get contact pronation delta
 const getContactPronationDelta = (): string => {
     let lastMeaningfulPronationDelta = "0°";
     if (contactPronationArray.length > 0) {
@@ -573,18 +583,26 @@ const getContactPronationDelta = (): string => {
     return lastMeaningfulPronationDelta;
 }
 
+// Helper function to get contact pronation average
 const getContactPronationAverage = (): string => {
     let average = contactPronationArray.length > 0 ? contactPronationArray.reduce((a, b) => a + b, 0) / contactPronationArray.length : 0;
     return String(Math.round(average)) + "°";
 }
 
+// Helper function to get contact pronation best
 const getContactPronationBest = (): string => {
-    // Filter values <= 100, then find the maximum of those
-    let validValues = contactPronationArray.filter(value => value <= 100);
-    let best = validValues.length > 0 ? Math.max(...validValues) : 0;
+    // Filter for values within optimal range (70-90°)
+    let validValues = contactPronationArray.filter(value => value >= 70 && value <= 90);
+    // Find value closest to center of optimal range (80°)
+    let best = validValues.length > 0 
+        ? validValues.reduce((closest, current) => 
+            Math.abs(current - 80) < Math.abs(closest - 80) ? current : closest
+          ) 
+        : 0;
     return String(Math.round(best)) + "°";
 }
 
+// Helper function to calculate contact pronation score
 const calculateContactPronationScore = (pronationValue: number): number => {
     const optimalMin = 70;
     const optimalMax = 90;
@@ -614,9 +632,10 @@ const calculateContactPronationScore = (pronationValue: number): number => {
     return Math.round(score);
 };
 
+// Helper function to get contact pronation tip
 const getContactPronationTip = (pronationValue: number): string => {
     if (pronationValue < 70) {
-        return "Try to Prontate your wrist more at contact";
+        return "Try to Pronate your wrist more at contact";
     } else if (pronationValue > 90) {
         return "You may be overpronating and risking injury";
     } else {
@@ -624,6 +643,7 @@ const getContactPronationTip = (pronationValue: number): string => {
     }
 }
 
+// Helper function to get contact pronation status
 const getContactPronationStatus = (pronationValue: number): string => {
     if (pronationValue < 20 || pronationValue > 140) {
         return "Poor";
@@ -636,6 +656,7 @@ const getContactPronationStatus = (pronationValue: number): string => {
     }
 }
 
+// Helper function to get contact pronation status color
 const getContactPronationStatusColor = (pronationValue: number): string => {
     if (pronationValue < 20 || pronationValue > 140) {
         return colorPoor;
@@ -648,12 +669,14 @@ const getContactPronationStatusColor = (pronationValue: number): string => {
     }
 }
 
+// Helper function to get contact pronation slider value
 const getContactPronationSliderValue = (pronationValue: number): number => {
     return pronationValue / 120;
 }
 
 // ------------------------------------------------------- MAIN FUNCTIONS -------------------------------------------------------
 
+// Helper function to reset data
 export const resetData = () => {
     // Wrist pronation variables
     yRotationScores = [];
@@ -714,11 +737,8 @@ export const processLiveData = () => {
     // Mark session as started when we have valid data
     sessionStarted = true;
 
-
-    // Normalize data lengths
     const dataLength = normalizeDataLengths(MasterData, SlaveData);
 
-    // Calculate max wrist pronation using quaternions
     let maxPronation = calculateMaxWristPronation(MasterData, SlaveData, dataLength);
     
     if (maxPronation > bestYRotationDifference && maxPronation < 100) {
@@ -726,64 +746,39 @@ export const processLiveData = () => {
     }
     console.log("Wrist pronation angle:", maxPronation);
 
-
-    // Get rotation tip
     let rotationTip = getRotationTip(maxPronation);
-
-    // Calculate rotation 
     let rotationScore = calculateRotationScore(maxPronation);
-    
-    // Calculate delta
     let delta = calculateDelta(maxPronation);
 
-    // Update averages
     updateAverages(maxPronation);
 
-    // Get wrist status
     const { status: wristStatus, color: wristStatusColor } = getWristStatus(maxPronation);
 
-    // Calculate slider value
     let wristSliderValue = calculateSliderValue(maxPronation);
-
-
-
-
-
     let swingSpeed = MasterData.max_speed || 0;
     let swingSpeedValue = String(swingSpeed) + " mph";
 
-    // Update best swing speed
     if (swingSpeed > bestSwingSpeed) {
         bestSwingSpeed = swingSpeed;
     }
 
-    // Calculate swing speed delta
     let speedDelta = calculateSpeedDelta(swingSpeed);
 
-    // Update swing speed averages
     updateSpeedAverages(swingSpeed);
 
-    // Get pronation speed and update averages
     let currentPronationSpeed = MasterData.pronation_speed || 0;
+
     updatePronationSpeedAverages(currentPronationSpeed);
-    
-    // Update pronation speed scores only on new swings
     updatePronationSpeedScores(currentPronationSpeed);
-    
-    // Get contact values first (this sets currentContactYEuler and currentContactPronation)
     getContactYEuler(MasterData);
     getContactPronation(MasterData, SlaveData);
-    
-    // Update contact averages only on new swings
     updateContactYEulerAverages(currentContactYEuler);
     updateContactPronationAverages(currentContactPronation);
-    
-    // Update contact timing scores only on new swings
     updateContactTimingScores(currentContactYEuler, currentContactPronation);
-    
     updateTotalAvgScore();
     updateGridScores();
 
+    // Format data for display
     let formattedData = [
         {
             title: 'Wrist Pronation',
@@ -808,12 +803,12 @@ export const processLiveData = () => {
             best: String(Math.round(bestSwingSpeed)) + " mph",
             score: String(Math.round(calculateSwingScore(swingSpeed))),
             label: ["0mph", "120mph"],
-            proRange: "80 mph +",   
+            proRange: "85 mph +",   
             tip: getSwingSpeedTip(swingSpeed),
             status: calculateSwingStatus(swingSpeed),
             statusColor: calculateSwingStatusColor(swingSpeed),
             sliderValue: calculateSwingSliderValue(swingSpeed),
-            sliderGradient: [0.66,0.71,1,1]
+            sliderGradient: [0.71,0.76,1,1]
         },
         {
             title: 'Wrist Pronation Speed',
@@ -869,8 +864,6 @@ export const processLiveData = () => {
             averageSwingSpeedScore: Math.round(averageSwingSpeedScore)
         }
         ];
- 
-    //console.log("formattedData:", formattedData);
     return formattedData;
 };
  

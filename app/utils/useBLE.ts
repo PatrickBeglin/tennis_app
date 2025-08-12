@@ -1,13 +1,24 @@
+/**
+ * Bluetooth Low Energy (BLE) Management Module
+ * 
+ * Handles dual ESP32 device connections for tennis swing analysis.
+ * Manages device discovery, connection lifecycle, data streaming,
+ * and sensor data processing from Master and Slave ESP32 devices.
+ * Provides global BLE context and sensor data access across the app.
+ * 
+ * This code was built on previous code taken from https://github.com/friyiajr/BLEBeaconSample
+ * (last accessed 2025-08-12)
+ */
+
 import { Buffer } from "buffer";
 import * as ExpoDevice from "expo-device";
 import React, { useEffect, useMemo, useState } from "react";
 import { PermissionsAndroid, Platform } from "react-native";
 import { BleError, BleManager, Characteristic, Device } from "react-native-ble-plx";
 
-
 const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
-const MASTER_CHARACTERISTIC_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8"  // Master
-const SLAVE_CHARACTERISTIC_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a9"   // Slave
+const MASTER_CHARACTERISTIC_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8"  
+const SLAVE_CHARACTERISTIC_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a9"   
 
 // Global variable to store sensor data - accessible from anywhere
 export let globalSensorData: {[deviceId: string]: any} = {};
@@ -16,7 +27,6 @@ console.log("globalSensorData:", globalSensorData);
 // Function to update global sensor data
 export const updateGlobalSensorData = (newData: {[deviceId: string]: any}) => {
     globalSensorData = { ...globalSensorData, ...newData };
-    //console.log("dataaaaaaaaaaaaa:", globalSensorData);
 };
 
 // Global BLE context for sharing state across components
@@ -60,20 +70,14 @@ interface BluetoothLowEnergyApi {
     refreshConnections: () => Promise<Device[]>;
 }
 
-
-
+// hook to use the BLE manager
 function useBLE(): BluetoothLowEnergyApi {
     const bleManager = useMemo(()=> new BleManager(), []);
-
     const [allDevices, setAllDevices] = useState<Device[]>([]);
     const [connectedDevices, setConnectedDevices] = useState<Device[]>([]);
     const [isConnecting, setIsConnecting] = useState<boolean>(false);
-    const maxConnections = 2; // Support for 2 ESP32s
-    // Store sensor data for each device in a dictionary with device id as key and any data as value 
-    // sensor data is a variable that stores the data from the tennis sensor
-    // setsensordata is a function that sets the sensor data
-    const [sensorData, setSensorData] = useState<{[deviceId: string]: any}>({}); // start with empty dictionary
-
+    const maxConnections = 2; 
+    const [sensorData, setSensorData] = useState<{[deviceId: string]: any}>({});
 
     // Listen for unexpected disconnections
     useEffect(() => {
@@ -121,11 +125,12 @@ function useBLE(): BluetoothLowEnergyApi {
                     console.log(`Device ${device.name} connection check failed, but keeping in list for now`);
                 }
             }
-        }, 10000); // Check every 10 seconds instead of 5
+        }, 10000);
 
         return () => clearInterval(interval);
     }, [connectedDevices]);
 
+    // function to request android permissions
     const requestAndroidPermissions = async () => {
         const bluetoothScanPermission = await PermissionsAndroid.request(
             PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
@@ -158,6 +163,7 @@ function useBLE(): BluetoothLowEnergyApi {
         )
     };
 
+    // function to request permissions
     const requestPermissions = async () => {
         if(Platform.OS === "android") {
             if((ExpoDevice.platformApiLevel ?? -1) <31){
@@ -177,17 +183,15 @@ function useBLE(): BluetoothLowEnergyApi {
         } else {
             return true;
         }
-        
     };
 
-/* return true if the device is already in the list */
+    // function to check if the device is already in the list
     const isDuplicateDevice = (devices: Device[], device: Device) =>
         devices.findIndex((d) => d.id === device.id) > -1;
 
-    /* scan for peripherals if permission is granted */
+    // function to scan for peripherals
     const scanForPeripherals = () => {
         console.log("Starting BLE scan...");
-        // only search for my esp32s
         bleManager.startDeviceScan(null, null, (error, device) => {
             if (error) {
                 console.log("BLE Scan Error:", error);
@@ -210,6 +214,7 @@ function useBLE(): BluetoothLowEnergyApi {
             bleManager.stopDeviceScan();
     };
 
+    // function to connect to a device
     const connectToDevice = async (device: Device) => {
         // Check if we're already at max connections
         if (connectedDevices.length >= maxConnections) {
@@ -239,7 +244,6 @@ function useBLE(): BluetoothLowEnergyApi {
                 throw new Error('Connection failed: Device not found or not advertising');
             }
             console.log(`Successfully connected to: ${connected.name}`);
-            
             // Request larger MTU for better data transfer
             try {
                 await connected.requestMTU(512);
@@ -260,12 +264,12 @@ function useBLE(): BluetoothLowEnergyApi {
             
         } catch (e) {
             console.log("Connection error:", e);
-            // handle error
         } finally {
             setIsConnecting(false);
         }
     };
 
+    // function to disconnect from a device
     const disconnectFromDevice = async (device: Device) => {
         try {
             console.log(`Disconnecting from: ${device.name}`);
@@ -291,12 +295,12 @@ function useBLE(): BluetoothLowEnergyApi {
         } catch (e) {
             console.log("Disconnection error:", e);
             // Even if the disconnect call fails, remove the device from our list
-            // since it's clearly not connected anymore
             console.log(`Removing ${device.name} from connected list due to disconnect error`);
             setConnectedDevices(prev => prev.filter(d => d.id !== device.id));
         }
     };
 
+    // function to disconnect all devices
     const disconnectAllDevices = async () => {
         console.log(`Disconnecting all ${connectedDevices.length} devices`);
         const devicesToDisconnect = [...connectedDevices]; // Create a copy to avoid mutation issues
@@ -317,6 +321,7 @@ function useBLE(): BluetoothLowEnergyApi {
         console.log("All devices disconnected");
     };
 
+    // function to update the sensor data
     const onTennisDataUpdate = (
         error: BleError | null,
         characteristic: Characteristic | null
@@ -330,15 +335,12 @@ function useBLE(): BluetoothLowEnergyApi {
         }
 
         const rawData = Buffer.from(characteristic.value, 'base64');
-        //console.log("Raw data length:", rawData.length);
-        //console.log("Raw data:", rawData);
 
         try {
             const deviceId = rawData[0];
 
             if (deviceId === 0x02) {
                 const tennisData = processBinaryData(rawData);
-                //console.log("MASTERTennis Data:", tennisData);
 
                 setSensorData(prev => ({
                     ...prev,
@@ -352,7 +354,6 @@ function useBLE(): BluetoothLowEnergyApi {
 
             } else if (deviceId === 0x03) {
                 const tennisData = processBinaryData(rawData);
-                //console.log("SLAVE Tennis Data:", tennisData);
 
                 setSensorData(prev => ({
                     ...prev,
@@ -373,7 +374,8 @@ function useBLE(): BluetoothLowEnergyApi {
     } ;
 
 
-    const processBinaryData = (buffer: Buffer) => { // buffer will be rawdata
+    // function to process the binary data
+    const processBinaryData = (buffer: Buffer) => { 
         let offset = 0; // current position in the buffer
 
         const deviceId = buffer[offset++]; // reads byte 0 then 1 etc
@@ -383,20 +385,18 @@ function useBLE(): BluetoothLowEnergyApi {
         const impactIndex = buffer[offset++];
         const pronationSpeed = (buffer[offset++] * 15.625) - 2000; // Convert back to gyro reading (°/s)
         const impactEulerY = (buffer[offset++] * 360.0 / 255.0); // Convert back to Euler Y angle (0-255 mapped to 0-360°)
-        const pronation = buffer[offset++] / 255.0 * 360.0; // pronation data
+        const pronation = buffer[offset++] / 255.0 * 360.0; 
 
         const swingData = [];
 
         for (let i = 0; i < pointsToSend; i++) {
             if (deviceId === 0x03) {
-                // Slave sends pronation data as individual bytes
                 const pronationValue = buffer[offset++] / 255.0 * 360.0; // Convert from 0-255 to 0-360 degrees
                 swingData.push(pronationValue);
             } else {
-                // Master sends quaternion data (12-bit packed) - placeholder for now
-                // Since we're not using quaternions anymore, just skip the data
+                // Since we're not using quaternions anymore skip the data
                 offset += 5; // Skip 5 bytes of quaternion data
-                swingData.push(0); // Placeholder value
+                swingData.push(0); 
             }
         }
         if (deviceId === 0x03) {
@@ -409,7 +409,6 @@ function useBLE(): BluetoothLowEnergyApi {
                 impact_euler_y: impactEulerY,
                 pronation: pronation,
                 swing: swingData,
-
             }
         }
         else if (deviceId === 0x02) {
@@ -438,12 +437,13 @@ function useBLE(): BluetoothLowEnergyApi {
         }  
     };
 
+    // function to start streaming data
     const startStreamingData = async (device: Device) => {
         if (device) {
             try {
-                console.log("🔍 Discovering services...");
+                console.log("Discovering services...");
                 const discoveredDevice = await device.discoverAllServicesAndCharacteristics();
-                console.log("✅ Services discovered");
+                console.log("Services discovered");
                 
                 // Monitor based on device name
                 if (device.id.includes("E8:6B:EA:2F:E8:0A")) {
@@ -453,7 +453,7 @@ function useBLE(): BluetoothLowEnergyApi {
                         onTennisDataUpdate,
                         'indication'
                     );
-                    console.log("✅ Started streaming MASTER data from:", device.name);
+                    console.log("Started streaming MASTER data from:", device.name);
                 } else if (device.id.includes("E8:6B:EA:2F:E8:4A")) {
                     const subscription = discoveredDevice.monitorCharacteristicForService(
                         SERVICE_UUID,
@@ -461,18 +461,18 @@ function useBLE(): BluetoothLowEnergyApi {
                         onTennisDataUpdate,
                         'notification'
                     );
-                    console.log("✅ Started streaming SLAVE data from:", device.name);
+                    console.log("Started streaming SLAVE data from:", device.name);
                 }
             } catch (error) {
-                console.log("❌ Error starting streaming:", error);
+                console.log("Error starting streaming:", error);
             }
         } else {
             console.log("No device to start streaming from");
         }
     };
 
+    // function to send a ping to the master
     const sendPingToMaster = async (data: string) => {
-        console.log("=== sendPingToMaster Debug ===");
         
         // First try with current connected devices
         let currentConnected = [...connectedDevices];
@@ -484,9 +484,6 @@ function useBLE(): BluetoothLowEnergyApi {
             console.log("No devices in current list, refreshing connections...");
             currentConnected = await refreshConnections();
         }
-        
-        console.log("Final connected devices count:", currentConnected.length);
-        console.log("Final connected devices:", currentConnected.map(d => ({ name: d.name, id: d.id })));
         
         // More precise device detection - prioritize ID matching over name matching
         console.log("Searching for devices with specific IDs...");
@@ -501,9 +498,6 @@ function useBLE(): BluetoothLowEnergyApi {
             console.log(`Checking device ${device.name} (${device.id}) for slave: ID match=${idMatch}`);
             return idMatch;
         });
-        
-        console.log("Looking for master device with ID containing: E8:6B:EA:2F:E8:0A");
-        console.log("Looking for slave device with ID containing: E8:6B:EA:2F:E8:4A");
         
         if (masterDevice) {
             console.log("Found master device:", masterDevice.name, "ID:", masterDevice.id);
@@ -564,10 +558,10 @@ function useBLE(): BluetoothLowEnergyApi {
                     MASTER_CHARACTERISTIC_UUID,
                     data
                 );
-                console.log("✅ Ping sent to master successfully");
+                console.log("Ping sent to master successfully");
                 pingSent = true;
             } catch (error) {
-                console.log("❌ Failed to send ping to master:", error);
+                console.log("Failed to send ping to master:", error);
             }
         }
         
@@ -582,21 +576,20 @@ function useBLE(): BluetoothLowEnergyApi {
                     SLAVE_CHARACTERISTIC_UUID,
                     data
                 );
-                console.log("✅ Ping sent to slave successfully");
+                console.log("Ping sent to slave successfully");
                 pingSent = true;
             } catch (error) {
-                console.log("❌ Failed to send ping to slave:", error);
+                console.log("Failed to send ping to slave:", error);
             }
         }
-        
         if (!pingSent) {
-            console.log("❌ Failed to send ping to any device");
+            console.log("Failed to send ping to any device");
             throw new Error("No devices available for ping");
         }
-        
-        console.log("✅ Ping sent to at least one device successfully");
+        console.log("Ping sent to at least one device successfully");
     };
 
+    // function to refresh the connections
     const refreshConnections = async () => {
         console.log("Refreshing connections...");
         const currentConnected = [...connectedDevices];
@@ -612,16 +605,16 @@ function useBLE(): BluetoothLowEnergyApi {
                 
                 if (isConnected) {
                     stillConnected.push(device);
-                    console.log(`✅ Device ${device.name} is still connected`);
+                    console.log(`Device ${device.name} is still connected`);
                 } else {
-                    console.log(`❌ Device ${device.name} is no longer connected, removing from list.`);
+                    console.log(`Device ${device.name} is no longer connected, removing from list.`);
                 }
             } catch (error) {
-                console.log(`⚠️ Failed to check connection for ${device.name} (${device.id}):`, error);
+                console.log(`Failed to check connection for ${device.name} (${device.id}):`, error);
                 // If we can't check the connection, assume it's still connected rather than removing it
                 // This prevents false removals due to temporary BLE issues
                 stillConnected.push(device);
-                console.log(`✅ Keeping ${device.name} in list despite connection check error`);
+                console.log(`Keeping ${device.name} in list despite connection check error`);
             }
         }
         
@@ -637,7 +630,6 @@ function useBLE(): BluetoothLowEnergyApi {
         
         return stillConnected;
     };
-
 
     return {
         scanForPeripherals,
@@ -655,8 +647,6 @@ function useBLE(): BluetoothLowEnergyApi {
         refreshConnections,
     }
 }
-
-
 
 export default useBLE;
 

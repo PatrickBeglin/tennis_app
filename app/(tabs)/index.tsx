@@ -1,31 +1,22 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import color from '../colors';
-import spacing from '../spacing';
-
-import ScoreRings from '../components/score_rings';
-import { AVERAGE_SCORES } from '../data/average_scores';
-
-import { StatBarsList } from "../components/stat_bar_list";
-import { StatTotals } from "../components/stat_totals";
-import { serveData } from "../data/serve_scores";
-
-import { Alert } from "react-native";
-import { useGlobalBLE } from "../utils/useBLE";
-
-// Import to trigger liveDataProcessing execution
-import "../data/liveDataProcessing";
-
-import DeviceModal from "../components/BLE_overlay";
+import DeviceModal from "../components/BLEOverlay";
+import ScoreRings from '../components/scoreRings';
 import { ShowAllCard } from "../components/showAll";
+import { StatBarsList } from "../components/statBarsList";
+import { StatTotals } from "../components/statTotals";
+import { AVERAGE_SCORES } from '../data/averageScores';
+import "../data/liveDataProcessing";
+import { serveData } from "../data/serveScores";
+import spacing from '../spacing';
+import { useGlobalBLE } from "../utils/useBLE";
 
 const router = useRouter();
 
-
 export default function Index() {
-  
   const { requestPermissions, scanForPeripherals, allDevices, stopDeviceScan, connectToDevice, disconnectFromDevice, disconnectAllDevices, connectedDevices, isConnecting, maxConnections } = useGlobalBLE();
   const [isModalVisible, setModalVisible] = useState<boolean>(false);
 
@@ -71,7 +62,6 @@ export default function Index() {
           <View style={styles.avatar} />
           <Text style={styles.name}>Patrick</Text>
         </View>
-
         <TouchableOpacity 
           style={[
             styles.connectButton
@@ -91,7 +81,6 @@ export default function Index() {
             {isConnecting ? "Connecting..." : getConnectionStatus()}
           </Text>
         </TouchableOpacity>
-
         <DeviceModal
           closeModal={hideModal}
           visible={isModalVisible}
@@ -104,10 +93,8 @@ export default function Index() {
           isConnecting={isConnecting}
       />
       </View>
-
       <ScrollView style={styles.scroll} contentContainerStyle={styles.container}>
         <Text style={styles.sectionTitle}>Play now</Text>
-
         <View style={styles.cardRow}>
           <View style={styles.cardL}>
             <View style={styles.imagePlaceholder} />
@@ -117,7 +104,6 @@ export default function Index() {
               <Text style={styles.buttonText}>Start Session</Text>
             </TouchableOpacity>
           </View>
-
           <View style={styles.cardR}>
             <View style={styles.imagePlaceholder} />
             <Text style={styles.cardTitleR}>Serve Mode</Text>
@@ -148,7 +134,6 @@ export default function Index() {
   );
 }
 
-
 const styles = StyleSheet.create({
   header: {
     width: '100%',
@@ -160,7 +145,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: 'black', 
   },
-
   profile: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -172,13 +156,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#343335',
     marginRight: 12,
   },
-
   name: {
     fontFamily: 'Inter-Regular',
     color: 'white',
     fontSize: 14,
   },
-
   connectButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -187,55 +169,41 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 12,
   },
-
   connectText: {
     color: 'white',
     fontFamily: 'Inter-Regular',
     fontSize: 14,
     marginLeft: 8,
   },
-
   connectTextConnected: {
     color: 'white',
     fontFamily: 'Inter-Regular',
     fontSize: 14,
     marginLeft: 8,
   },
-
   screen: {
     flex: 1,
     backgroundColor: "black",
   },
-
-
-
-
-
-
-
   scroll: {
     flex: 1,
     backgroundColor: "black",
   },
-
   container: {
     paddingHorizontal: 28,
     paddingBottom: spacing.m,
   },
-
   sectionTitle: {
     color: "white",
     fontSize: 20,
     fontFamily: 'Inter-Bold',
     marginBottom: spacing.m,
   },
-
   cardRow: {
     flexDirection: "row",
     marginBottom: spacing.l,
     alignItems: "stretch",
   },
-
   cardL: {
     marginRight: "2%",
     backgroundColor: color.card,
@@ -243,12 +211,11 @@ const styles = StyleSheet.create({
     padding: 12,
     width: "49%",
     borderWidth: 0.5,
-    borderColor: color.purple, // placeholder for gradient effect
+    borderColor: color.purple, 
     display: 'flex',
     flexDirection: 'column',
     flex: 1,
   },
-
     cardR: {
     backgroundColor: color.card,
     borderRadius: 12,
@@ -260,7 +227,6 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     flex: 1,
   },
-
   imagePlaceholder: {
     aspectRatio: 1,
     width: '100%',
@@ -268,28 +234,24 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     marginBottom: 16,
   },
-
   cardTitleR: {
     fontFamily: 'Inter-Medium',
     color: color.blue,
     fontSize: 16,
     marginBottom: 2,
   },
-
   cardTitleL: {
     fontFamily: 'Inter-Medium',
     color: color.purple,
     fontSize: 16,
     marginBottom: 2,
   },
-
   cardDescription: {
     fontFamily: 'Inter-Regular',
     color: color.accentText,
     fontSize: 12,
     marginBottom: 16,
   },
-
   button: {
     borderColor: "#aaa",
     borderWidth: 1,
@@ -299,24 +261,20 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     marginTop: 'auto', 
   },
-
   buttonText: {
     fontFamily: "Inter-Bold",
     color: "white",
     fontSize: 14,
   },
-
   doubleTitle: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'baseline'
   },
-
   showMore: {
     fontSize: 14,
     color: color.purple,
   },
-
   mainCard: {
     borderRadius: 12,
     paddingTop: spacing.m,

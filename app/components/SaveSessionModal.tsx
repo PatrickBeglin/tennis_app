@@ -1,3 +1,4 @@
+// SaveSessionModal: Modal for saving or discarding the session
 import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import React from 'react';
@@ -30,12 +31,10 @@ export default function SaveSessionModal({
           <TouchableOpacity style={styles.closeButton} onPress={onCancel}>
             <Ionicons name="close" size={24} color="white" />
           </TouchableOpacity>
-          
           <Text style={styles.modalTitle}>Save session?</Text>
           <Text style={styles.modalDescription}>
             Would you like to save this session to your history?
-          </Text>
-          
+          </Text>  
           <View style={styles.modalButtons}>
             <TouchableOpacity 
               style={[styles.modalButton, styles.saveButton]} 
@@ -43,7 +42,6 @@ export default function SaveSessionModal({
             >
               <Text style={styles.saveButtonText}>Save</Text>
             </TouchableOpacity>
-            
             <TouchableOpacity 
               style={[styles.modalButton, styles.discardButton]} 
               onPress={onDiscard}

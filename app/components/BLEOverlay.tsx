@@ -1,13 +1,14 @@
+// DeviceModal: Bluetooth device connection management component
 import { Ionicons } from "@expo/vector-icons";
 import React, { FC, useCallback } from "react";
 import {
-    FlatList,
-    ListRenderItemInfo,
-    Modal,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  FlatList,
+  ListRenderItemInfo,
+  Modal,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { Device } from "react-native-ble-plx";
 import colors from "../colors";
@@ -141,7 +142,7 @@ const DeviceModal: FC<DeviceModalProps> = ({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,1)", // solid black background
+    backgroundColor: "rgba(0,0,0,1)", 
     alignItems: "center",
   },
   modalBox: {

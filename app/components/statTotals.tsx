@@ -1,8 +1,7 @@
+// StatTotals: Component for the stat totals on the home page
 import React from 'react'
 import { StyleSheet, Text, View, ViewStyle } from 'react-native'
-import type { ServeModeData } from '../data/serve_scores'
-
-
+import type { ServeModeData } from '../data/serveScores'
 
 type Props = {
   data: ServeModeData
@@ -13,12 +12,11 @@ export function StatTotals({
   data,
   containerStyle,
 }: Props) {
-  // split "48mins" → ["48","mins"]
+  // split number and unit
   const [num, unit] = (() => {
     const match = /^(\d+)(.*)$/.exec(data.timePlayed)
     return match ? [match[1], match[2]] : [data.timePlayed, '']
   })()
-
   return (
     <View style={[styles.container, containerStyle]}>
       <View style={styles.block}>
@@ -28,12 +26,10 @@ export function StatTotals({
           {unit ? <Text style={styles.unit}>{unit}</Text> : null}
         </View>
       </View>
-
       <View style={styles.block}>
         <Text style={styles.label}>Total serves</Text>
         <Text style={styles.number}>{data.totalServes}</Text>
       </View>
-
       <View style={styles.block}>
         <Text style={styles.label}>Total score</Text>
         <Text style={styles.number}>{data.totalScore}</Text>

@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import color from '../colors';
-import type { GridScore } from '../data/grid_average_scores';
+import type { GridScore } from '../data/gridAverageScores';
 import spacing from '../spacing';
 
 export default function StatGrid({ data }: { data: GridScore[] }) {
@@ -61,5 +61,4 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontFamily: 'Inter-Medium',
   },
-
 });

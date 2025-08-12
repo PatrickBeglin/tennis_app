@@ -1,3 +1,4 @@
+// serveMode.tsx: serve mode screen
 export const options = {
     headerShown: false,
   };
@@ -11,26 +12,23 @@ import CalibrateModal from "./components/calibrateModal";
 import { PostServe } from "./components/postServe";
 import SaveSessionModal from "./components/SaveSessionModal";
 import StatGrid from "./components/stat_grid";
-import { StatTotals } from "./components/stat_totals";
+import { StatTotals } from "./components/statTotals";
+import { GridScore } from "./data/gridAverageScores";
 import { getCurrentGridScores, processLiveData, resetData } from './data/liveDataProcessing';
 import spacing from "./spacing";
-import { useGlobalBLE } from "./utils/useBLE";
 
 export default function AboutScreen() {
   const [isSaveModalVisible, setIsSaveModalVisible] = useState(false);
   const [isCalibrateModalVisible, setIsCalibrateModalVisible] = useState(true);
   const [swingData, setSwingData] = useState<any[]>([]);
   
-  // Use the global BLE context
-  const { sendPingToMaster } = useGlobalBLE();
-
   useEffect(() => {
     const interval = setInterval(() => {
       const newData = processLiveData();
       if (newData.length > 0) { // Only update if there's new data
         setSwingData(newData);
       }
-    }, 1000); // Check every second
+    }, 1000);
 
     return () => clearInterval(interval);
   }, []);
@@ -58,7 +56,7 @@ export default function AboutScreen() {
     best: '0',
     score: '0',
     label: ['20mph', '150mph'],
-    proRange: '85mph - 95mph',
+    proRange: '85+ mph',
     tip: 'No data available',
     status: 'No Data',
     statusColor: '#666666',
@@ -119,25 +117,25 @@ export default function AboutScreen() {
     setIsSaveModalVisible(true);
   };
 
+  // placeholder for save session logic currerntly just navigates back
   const handleSaveSession = () => {
-    // TODO: Implement save session logic
+    resetData();
     console.log("Saving session...");
     setIsSaveModalVisible(false);
-    router.back(); // Navigate back after saving
+    router.back(); 
   };
 
+  // placeholder for discard session logic currently just resets the data and navigates back
   const handleDiscardSession = () => {
     resetData();
-    // TODO: Implement discard session logic
     console.log("Discarding session...");
     setIsSaveModalVisible(false);
-    router.back(); // Navigate back after discarding
+    router.back(); 
   };
 
   const handleCancelSave = () => {
     setIsSaveModalVisible(false);
   };
-
 
   return (
     <View style={{ flex: 1, backgroundColor: "black" }}>
@@ -170,21 +168,19 @@ export default function AboutScreen() {
                   <View style={styles.statTotalCard}>
                     <StatTotals data={sessionSummaryData} />
                   </View>
-                  <StatGrid data={getCurrentGridScores()} />
+                  <StatGrid data={getCurrentGridScores() as GridScore[]} />
                   <View style={styles.showAllCard}>
                     <Text style={styles.showAllText}>Show All Serves</Text>
                     <Ionicons name="chevron-forward" size={34} color={color.accentText} />
                   </View>
               </View>
         </ScrollView>
-
         <SaveSessionModal
           visible={isSaveModalVisible}
           onSave={handleSaveSession}
           onDiscard={handleDiscardSession}
           onCancel={handleCancelSave}
         />
-
         <CalibrateModal
           visible={isCalibrateModalVisible}
           onCancel={() => setIsCalibrateModalVisible(false)}
@@ -192,8 +188,6 @@ export default function AboutScreen() {
     </View>
   );
 }
-
-
 
 const styles = StyleSheet.create({  
     container: {
@@ -209,54 +203,52 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: 'black', 
-      },
-      headerColumn: {
+    },
+    headerColumn: {
         flex: 1,
         justifyContent: 'center',
-      },
-      headerCenter: {
+    },
+    headerCenter: {
         alignItems: 'center',
         flex: 2,
-      },
-      backButton: {
+    },
+    backButton: {
         alignItems: 'center',
         flexDirection: 'row',
-      },
-    
-      backButtonIcon: {
+    },
+    backButtonIcon: {
         fontSize: 24,
         color: "white",
         marginRight: 6,
-      },
-      backButtonText: {
+    },
+    backButtonText: {
         fontFamily: 'Inter-Regular',
         fontSize: 14,
         color: "white",
-      },
-    
-      title: {
+    },
+    title: {
         fontFamily: 'Inter-Bold',
         fontSize: 24,
         color: "white",
         textAlign: 'center',
-      },
-      statTotalCard: {
+    },
+    statTotalCard: {
         paddingHorizontal: spacing.m,
         paddingVertical: spacing.l,
         backgroundColor: color.card,
         borderRadius: 12,
         marginBottom: spacing.m,
-      },
-      scroll: {
+    },
+    scroll: {
         backgroundColor: "black",
-      },
-      sectionTitle: {
+    },
+    sectionTitle: {
         color: "white",
         fontSize: 20,
         fontFamily: 'Inter-Bold',
         marginBottom: spacing.m,
-      },
-      showAllCard: {
+    },
+    showAllCard: {
         marginTop: spacing.s,
         backgroundColor: color.card,
         paddingHorizontal: spacing.m,

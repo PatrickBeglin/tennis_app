@@ -1,16 +1,17 @@
+// ScoreRings: Component for the score rings on the home and summary pages
 import React from 'react'
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { AnimatedCircularProgress } from 'react-native-circular-progress'
 import color from '../colors'
-import type { Score } from '../data/average_scores'
+import type { Score } from '../data/averageScores'
 import spacing from '../spacing'
 
 type Props = {
   data: Score[]
-  size?: number          // diameter of each ring
-  width?: number         // stroke thickness
+  size?: number // diameter of each ring
+  width?: number // stroke thickness
   onSegmentPress?: (key: Score['key'] | 'overall') => void
-  selectedKey?: Score['key'] | 'overall' // <-- now supports 'overall'
+  selectedKey?: Score['key'] | 'overall' 
 }
 
 export default function ScoreRings({
@@ -58,7 +59,6 @@ export default function ScoreRings({
                 backgroundColor = {color.cardLight}
                 duration={500}
               />
-            
               <View style={{
                 position: 'absolute',
                 top:   width / 2,
@@ -73,7 +73,6 @@ export default function ScoreRings({
                 </Text>
               </View>
             </View>
-
             <Text style={styles.labelText}>
               {s.label}
             </Text>

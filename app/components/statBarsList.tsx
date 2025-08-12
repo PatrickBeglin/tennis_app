@@ -1,7 +1,8 @@
+// StatBarsList: Component for the stat bars on the home page
 import React from 'react'
 import { StyleSheet, View } from 'react-native'
-import StatBar from '../components/stat_bar'
-import type { ServeModeData } from '../data/serve_scores'
+import type { ServeModeData } from '../data/serveScores'
+import StatBar from './stat_bar'
 
 export function StatBarsList({ data }: { data: ServeModeData }) {
   return (

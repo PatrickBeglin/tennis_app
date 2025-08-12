@@ -1,3 +1,4 @@
+// CalibrateModal: Modal for calibrating the pronation
 import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import React, { useState } from 'react';
@@ -58,7 +59,6 @@ export default function CalibrateModal({
               <Text style={styles.modalDescription}>
                 With your palm up straighten your right arm out in front of you and then press calibrate.
               </Text>
-              
               <View style={styles.modalButtons}>
                 <TouchableOpacity 
                   style={[styles.modalButton, styles.saveButton]} 
@@ -66,7 +66,6 @@ export default function CalibrateModal({
                 >
                   <Text style={styles.saveButtonText}>Calibrate</Text>
                 </TouchableOpacity>
-                
                 <TouchableOpacity 
                   style={[styles.modalButton, styles.discardButton]} 
                   onPress={onCancel}

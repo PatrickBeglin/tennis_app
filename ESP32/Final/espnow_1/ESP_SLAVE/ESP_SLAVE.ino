@@ -1,3 +1,18 @@
+/*
+ * ESP32 Slave Device - Wrist Pronation Sensor
+ * 
+ * Secondary sensor device for tennis serve analysis using BNO055 IMU.
+ * Receives swing triggers from ESP32 Master and records synchronized
+ * wrist pronation data during swings.
+ * Communicates with master device via ESP-NOW and provides data to react native app
+ * upon request for comprehensive swing analysis.
+ * 
+ * Parts of this code was built on previous example code from arduino example libraries as well as,
+ * https://randomnerdtutorials.com/esp-32-arduino-ide/,
+ * and https://github.com/programming-electronics-academy/espnow-minimum
+ * (last accessed 2025-08-12)
+ */
+
 #include <esp_now.h>
 #include <WiFi.h>
 #include <Wire.h>
@@ -11,15 +26,15 @@
 #include <math.h>
 #include <cmath>
 
-//ble stuff
 BLEServer* pServer = NULL;
 
-#define SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
+#define SERVICE_UUID "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
 #define SLAVE_CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a9"
 
 BLECharacteristic* pCharacteristic = NULL;
 bool deviceConnected = false;
 
+// class to handle server callbacks
 class MyServerCallbacks: public BLEServerCallbacks {
   void onConnect(BLEServer* pServer) {
     deviceConnected = true;
@@ -33,7 +48,6 @@ class MyServerCallbacks: public BLEServerCallbacks {
 Adafruit_BNO055 bno = Adafruit_BNO055(-1, 0x28, &Wire);
 
 static const int bufferSize = 200;
-//imu::Quaternion buffer[bufferSize];
 float accelBuffer[bufferSize]; // Track acceleration magnitude for impact detection
 float pronationBuffer[bufferSize];
 int head = 0;
@@ -53,10 +67,8 @@ imu::Quaternion currentMasterQuaternion;
 float currentPronation;
 float pronationDeg; // Raw pronation value (available globally)
 
-// changes based on ping
+// offset for calibration of pronation updated by master
 float calibrationOffset = 0;
-
-
 
 // Callback when data is sent
 void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
@@ -92,7 +104,6 @@ void OnDataRecv(const esp_now_recv_info *info, const uint8_t *incomingData, int 
     sendData(swingId, pointsToSend);
   }
   else if (command == 0x03 && len >= 17) {
-    //Serial.println("Received quaternion data from master");
     processQuaternionData(incomingData);
   }
   else if (command == 0x04) {
@@ -103,8 +114,7 @@ void OnDataRecv(const esp_now_recv_info *info, const uint8_t *incomingData, int 
   }
 }
 
-
-
+// function to process quaternion data
 void processQuaternionData(const uint8_t* data) {
   // Extract quaternion values from the received data
   // Data format: [0x03, w, x, y, z] where w,x,y,z are 4-byte floats
@@ -115,8 +125,6 @@ void processQuaternionData(const uint8_t* data) {
   
   // Create quaternion object
   imu::Quaternion quat(w, x, y, z);
-
-  // For example, store in buffer, send via BLE, etc.
   currentMasterQuaternion = quat;
 }
 
@@ -126,6 +134,7 @@ void recordOwnQuaternionData() {
   currentSlaveQuaternion = quat;
 }
 
+// function to calculate current pronation
 void calculateCurrentPronation() {
   // 1. Conjugate (inverse) of the slave (upper-arm) quaternion
   imu::Quaternion qS = currentSlaveQuaternion;
@@ -153,7 +162,7 @@ void calculateCurrentPronation() {
   // 5. Convert to degrees
   pronationDeg = rollRad * 180.0f / M_PI;
 
-  // 6. Optional dead-band to kill tiny noise around zero
+  // 6. kill tiny noise around zero
   const float deadbandDeg = 1.0f;  
   if (fabsf(pronationDeg) < deadbandDeg) 
       pronationDeg = 0.0f;
@@ -167,32 +176,31 @@ void calculateCurrentPronation() {
   Serial.println(" degrees");
 }
 
-
+// function to start recording
 void startRecording() {
   recordingActive = true;
-  head = 0; // Reset buffer to start fresh
+  head = 0; // Reset buffer
   
   // Clear the buffer to ensure no old data
   for (int i = 0; i < bufferSize; i++) {
-    // buffer[i] = imu::Quaternion(1, 0, 0, 0); // Identity quaternion
-    accelBuffer[i] = 0.0f; // Clear acceleration buffer
-    pronationBuffer[i] = 0.0f; // Clear pronation buffer
+    accelBuffer[i] = 0.0f; 
+    pronationBuffer[i] = 0.0f; 
   }
   
   Serial.println("Recording started - buffer cleared");
 }
 
+// function to send data
 void sendData(uint8_t swingId, uint8_t pointsToSend) {
   // Create binary packet
-  uint8_t binaryData[250]; // ESP-NOW limit
+  uint8_t binaryData[500];
   int dataIndex = 0;
 
   binaryData[dataIndex++] = 0x03; // 03 for slave
   binaryData[dataIndex++] = swingId; // Swing ID from master
   binaryData[dataIndex++] = 0; // 0x00 for speed
   
-  // Limit points to send based on available data and ESP-NOW limit
-  int actualPointsToSend = min(min((int)pointsToSend, head), 82); // 5 bytes per sample (82 * 5 = 410 bytes, within BLE limit)
+  int actualPointsToSend = min(min((int)pointsToSend, head), 99); // 5 bytes per sample (99 * 5 = 495 bytes, within BLE limit)
   binaryData[dataIndex++] = actualPointsToSend; // Number of points
   
   // Find peak impact point (maximum acceleration) within the recorded data
@@ -207,8 +215,8 @@ void sendData(uint8_t swingId, uint8_t pointsToSend) {
   }
   
   binaryData[dataIndex++] = (uint8_t)(impactIndex % 256); // impact index (peak acceleration point)
-  binaryData[dataIndex++] = 0; // Mock gyro score (0 for slave - not used)
-  binaryData[dataIndex++] = 0; // Mock eulerz score (0 for slave - not used)
+  binaryData[dataIndex++] = 0; // Mock gyro score 
+  binaryData[dataIndex++] = 0; // Mock eulerz score 
     
   Serial.print("Slave has ");
   Serial.print(head);
@@ -218,13 +226,13 @@ void sendData(uint8_t swingId, uint8_t pointsToSend) {
   Serial.print(actualPointsToSend);
   Serial.println(" points");
 
-  // Send data starting from index 0 (since we reset the buffer)
-  for (int i = 0; i < actualPointsToSend && i < bufferSize && dataIndex < 245; i++) {
+  // Send data starting from index 0 
+  for (int i = 0; i < actualPointsToSend && i < bufferSize && dataIndex < 495; i++) {
     binaryData[dataIndex++] = (uint8_t)(pronationBuffer[i] * 255.0f / 360.0f); // in native code convert back by dividing by 255 and multiplying by 360
   }
 
   // Send via ble to phone
-  delay(200); // Reduced delay to prevent interference with other esp
+  delay(200); 
   Serial.print("Sending BLE data: ");
   Serial.print(dataIndex);
   Serial.print(" bytes | Impact at sample: ");
@@ -244,7 +252,7 @@ void setup() {
   Wire.begin(22, 19);
   Serial.begin(115200);
   Serial.println("go");
-  delay(3000);  // Let USB settle
+  delay(3000); 
   Serial.println("Serial is working");
   while (!Serial) delay(10);
   
@@ -264,14 +272,14 @@ void setup() {
   Serial.print(" Gyro:"); Serial.print(gyro);
   Serial.print(" Mag:"); Serial.println(mag);
   
-  // Wait for gyro and mag calibration (accel not needed for quaternions)
+  // Wait for gyro and mag calibration 
   int calibrationAttempts = 0;
   const int maxAttempts = 300; // 30 seconds timeout
   
   while ((gyro < 3 || mag < 3) && calibrationAttempts < maxAttempts) {
     delay(100);
     bno.getCalibration(&sys, &gyro, &accel, &mag);
-    if (calibrationAttempts % 50 == 0) { // Only print every 50 attempts (5 seconds)
+    if (calibrationAttempts % 50 == 0) { 
       Serial.print("SLAVE Calibration attempt "); Serial.print(calibrationAttempts);
       Serial.print(" - Sys:"); Serial.print(sys);
       Serial.print(" Gyro:"); Serial.print(gyro);
@@ -306,7 +314,7 @@ void setup() {
     ESP.restart();
   }
 
-  // Create a BLE Characteristic (simplified)
+  // Create a BLE Characteristic 
   pCharacteristic = pService->createCharacteristic(
                       SLAVE_CHARACTERISTIC_UUID,
                       BLECharacteristic::PROPERTY_INDICATE | BLECharacteristic::PROPERTY_NOTIFY
@@ -316,10 +324,9 @@ void setup() {
     ESP.restart();
   }
 
-  // Start the service
   pService->start();
 
-  // Start advertising (simplified)
+  // Start advertising 
   BLEDevice::getAdvertising()->addServiceUUID(SERVICE_UUID);
   BLEDevice::startAdvertising();
   Serial.println("BLE ready");
@@ -333,7 +340,6 @@ void setup() {
     ESP.restart();
   }
 
-  // Once ESPNow is successfully Init, we will register for Send CB to
   // get the status of Transmitted packet
   esp_now_register_send_cb(OnDataSent);
   
@@ -376,10 +382,9 @@ void loop() {
 
   // Only record data if recording is active
   if (recordingActive && head < bufferSize) {
-    // buffer[head] = quat;  // Store current reading
-    pronationBuffer[head] = currentPronation;  // Store pronation here
+    pronationBuffer[head] = currentPronation;  
     accelBuffer[head] = accelMagnitude;
-    head = (head + 1) % bufferSize;  // Move head pointer
+    head = (head + 1) % bufferSize; 
   }
 
   //50hz

@@ -1,3 +1,4 @@
+// define colors for the app
 export default {
     card: "#161416",
     cardLight: "#343335",

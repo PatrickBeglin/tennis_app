@@ -1,3 +1,4 @@
+// ShowAllCard: Component for the show all sessions button
 import { Ionicons } from "@expo/vector-icons";
 import { StyleSheet, Text, View } from "react-native";
 import color from "../colors";

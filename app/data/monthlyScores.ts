@@ -1,3 +1,4 @@
+// monthlyScores: mock data file for bar chart
 export interface MonthlyScore {
     key: 'january' | 'february' | 'march' | 'april' | 'may' | 'june' | 'july' | 'august' | 'september' | 'october' | 'november' | 'december'
     label: string
