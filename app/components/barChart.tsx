@@ -1,4 +1,4 @@
-// file creating a bar chart component from gifted charts
+// BarChart: Monthly tennis score visualisation component
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { BarChart as GiftedBarChart } from 'react-native-gifted-charts';

@@ -1,3 +1,4 @@
+// averageScores: mock data file for average scores on the summary page
 export interface Score {
   key: 'serve' | 'forehand' | 'backhand'
   label: string
