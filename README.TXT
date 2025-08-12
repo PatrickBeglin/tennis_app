@@ -1,15 +1,18 @@
 OVERVIEW
 --------
+
 A React Native companion mobile application built with Expo that tracks tennis serves using two
 ESP32s connected via Bluetooth Low Energy (BLE) providing insights into users tennis serve form.
 
 FEATURES
 --------
+
 - Real-time serve tracking using BNO055 sensors
 - Data visualisation 
 
 TECHNICAL STACK
 ---------
+
 - Frontend: React Native with Expo
 - Navigation: Expo Router
 - Bluetooth: React Native BLE PLX
@@ -17,6 +20,7 @@ TECHNICAL STACK
 
 PREREQUISITES
 ---------
+
 - Node.js
 - npm or yarn package manager
 - Expo CLI
@@ -37,6 +41,7 @@ INSTALLATION
 
 EXECUTION
 ---------
+
 1. With an android smartphone run:
    npx expo run:android
 
@@ -50,23 +55,32 @@ HARDWARE SETUP
 
 USER MANUAL
 ---------
+
 Charging the device:
 1.	Locate the USB-C charging module inside each sweat band.
+
 2.	Connect it to a USB power source.
+
 3.	Charge until the charging module’s indicator light turns green.
 
 Using the device:
 1.	Power on: Plug the LiPo battery into the charging module inside each sweat band. A green light on the module confirms the device is powered.
+
 2.	Identify each band using the labels (“ARM” and “WRIST”)
+
 3.	Fit the Upper Arm Band first:	
 	    - Arrow points up your arm.“UP”
-	label should face outwards.
+	    - label should face outwards.
+
 4.	Fit the Wrist Band:	
 	    - Arrow points up your arm.“UP”
 	    - label should face outwards.
 5.	Open the app and tap the Bluetooth connect button (top right of the home screen).
+
 6.	Connect to both devices: ESP_SLAVE and ESP_MASTER.
+
 7.	Select Serve Mode and follow the on-screen calibration instructions.
+
 8.	You’re now ready to start serving and receiving feedback through the app!
 
 Powering off:
