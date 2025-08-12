@@ -6,7 +6,7 @@ import color from "../colors";
 import BarChart from "../components/barChart";
 import ScoreRings from "../components/scoreRings";
 import { ShowAllCard } from "../components/showAll";
-import StatGrid from "../components/stat_grid";
+import StatGrid from "../components/statGrid";
 import { AVERAGE_SCORES } from "../data/averageScores";
 import { GRID_AVERAGE_SCORES } from "../data/gridAverageScores";
 import { MONTHLY_SCORES } from "../data/monthlyScores";

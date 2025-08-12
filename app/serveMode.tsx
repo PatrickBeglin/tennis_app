@@ -11,7 +11,7 @@ import color from "./colors";
 import CalibrateModal from "./components/calibrateModal";
 import { PostServe } from "./components/postServe";
 import SaveSessionModal from "./components/SaveSessionModal";
-import StatGrid from "./components/stat_grid";
+import StatGrid from "./components/statGrid";
 import { StatTotals } from "./components/statTotals";
 import { GridScore } from "./data/gridAverageScores";
 import { getCurrentGridScores, processLiveData, resetData } from './data/liveDataProcessing';
